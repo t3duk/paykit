@@ -20,7 +20,7 @@ const fontMono = Geist_Mono({
 
 const title = "PayKit — Open-source payment orchestration for TypeScript";
 const description =
-  "PayKit is a TypeScript-first payments orchestration framework that unifies multiple payment providers behind a single, extensible API.";
+  "Open-source TypeScript payment toolkit that unifies multiple payment providers behind a single, extensible API.";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://paykit.sh"),
