@@ -1,0 +1,19 @@
+{
+  "name": "getpaykit",
+  "version": "0.1.0",
+  "description": "TypeScript-first payments orchestration framework for modern SaaS",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/getpaykit/paykit.git"
+  },
+  "keywords": [
+    "payments",
+    "subscriptions",
+    "orchestration",
+    "stripe",
+    "paypal",
+    "typescript"
+  ]
+}
