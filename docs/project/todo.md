@@ -1,31 +1,15 @@
 # TODO
 
-Active tasks. See [roadmap.md](./roadmap.md) for the full plan.
-
-## Now
-
-- [x] CLAUDE.md / AGENTS.md
-- [ ] SDK API design document (types, method signatures, options)
-- [ ] Database schema design (tables, relationships, indexes)
-- [ ] Provider adapter interface design
-
-## Next — Core Library
-
-- [ ] `packages/paykit` core library scaffold
-- [ ] `packages/stripe` adapter
-- [ ] `packages/drizzle` adapter
-- [ ] Integration tests
-
-## Next — Website & Docs
-
-- [x] Landing page (See [reference](./references.md))
-- [x] Documentation website
-- [ ] Example project
-
-## Later
-
-- [ ] PayPal adapter
-- [ ] CLI tooling
-- [ ] CONTRIBUTING.md (setup steps, branching, PR process)
-- [ ] `.postmortem/` directory with template
-- [ ] `.github/ISSUE_TEMPLATE/` (bug report + feature request)
+- Add Creem logo to landing
+- setup oxlint tw plugin
+- fix multiple H1 tags on landing
+- separate /docs styles to docs.css
+- improvde structure for landing page sections (use /sections)
+- set shadcn radius to small
+- update hero description
+- get rid of em dashes
+- add icons to code examples tabs
+- add inspired-by section
+- add self-hosted analytics
+- resolve all warnings in the codebase
+- add coderabbit
