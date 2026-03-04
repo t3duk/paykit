@@ -583,6 +583,19 @@ figure.shiki > div:first-child,
   animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 
+#nd-sidebar
+  [data-radix-scroll-area-viewport]
+  > div
+  > [data-state="open"]:has(> button .docs-category-chevron)
+  > [class*="animate-fd-collapsible"][data-state="open"],
+#nd-sidebar-mobile
+  [data-radix-scroll-area-viewport]
+  > div
+  > [data-state="open"]:has(> button .docs-category-chevron)
+  > [class*="animate-fd-collapsible"][data-state="open"] {
+  padding-bottom: 0.5rem;
+}
+
 #nd-sidebar [class*="animate-fd-collapsible"][data-state="closed"],
 #nd-sidebar-mobile [class*="animate-fd-collapsible"][data-state="closed"] {
   animation-duration: 170ms !important;
