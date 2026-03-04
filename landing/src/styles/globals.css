@@ -1,7 +1,7 @@
 /* spell-checker:disable */
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/black.css";
 @import "fumadocs-ui/css/preset.css";
 @import "shadcn/tailwind.css";
 @source "../components/**/*.{ts,tsx}";
@@ -586,13 +586,11 @@ figure.shiki > div:first-child,
 #nd-sidebar
   [data-radix-scroll-area-viewport]
   > div
-  > [data-state="open"]:has(> button .docs-category-chevron)
-  > [class*="animate-fd-collapsible"][data-state="open"],
+  > [data-state="open"],
 #nd-sidebar-mobile
   [data-radix-scroll-area-viewport]
   > div
-  > [data-state="open"]:has(> button .docs-category-chevron)
-  > [class*="animate-fd-collapsible"][data-state="open"] {
+  > [data-state="open"] {
   padding-bottom: 0.5rem;
 }
 
