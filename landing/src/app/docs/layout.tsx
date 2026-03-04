@@ -14,7 +14,7 @@ import type * as PageTree from "fumadocs-core/page-tree";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import type { ReactElement, ReactNode } from "react";
 import { LogoLockup } from "@/components/icons/logo";
-import { GITHUB_URL } from "@/lib/conts";
+import { GITHUB_URL } from "@/lib/consts";
 import { source } from "@/lib/source";
 
 const categoryIcons = {
