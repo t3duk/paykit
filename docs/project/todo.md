@@ -1,6 +1,5 @@
 # TODO
 
-- Add Creem logo to landing
 - setup oxlint tw plugin
 - fix multiple H1 tags on landing
 - separate /docs styles to docs.css
