@@ -6,6 +6,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Icons } from "@/components/icons";
+import { CreemIcon } from "@/components/icons/creem";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
@@ -442,11 +443,17 @@ export function HeroReadMe() {
                             d="M32.154 10.694V21.113l34.575.751c33.315.724 34.94.966 44.623 6.66 32.453 19.077 29.294 71.09-5.193 85.472-5.992 2.5-15.922 3.3-40.958 3.3H32.154v41.49 41.49h11.702 11.702v-30.632-30.632l26.064-.855c22.107-.726 27.679-1.634 36.703-5.991 15.017-7.254 29.536-22.83 35.153-37.716 9.43-24.991 2.627-55.38-16.353-73.051C118.533 4.09 105.065.275 62.559.275H32.154v10.42zm0 26.143c0 1.387-1.915 6.477-4.255 11.311-4.213 8.704-16.779 18.085-24.226 18.085-2.015 0-3.434 1.757-3.434 4.255 0 2.87 1.42 4.255 4.362 4.255 11.183 0 23.508 11.673 26.394 24.999 2.155 9.95 5.853 8.496 10.734-4.219 4.59-11.957 14.662-20.78 23.719-20.78 3.585 0 5.004-1.207 5.004-4.256 0-2.498-1.42-4.255-3.434-4.255-7.447 0-20.013-9.381-24.226-18.085-2.34-4.834-4.255-9.923-4.255-11.31 0-1.386-1.436-2.52-3.191-2.52s-3.192 1.134-3.192 2.52z"
                           />
                         </svg>
+                        {/* Creem */}
+                        <CreemIcon
+                          width={15}
+                          height={15}
+                          className="opacity-60 transition-all duration-300 group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.25s] group-hover/card:opacity-100"
+                        />
                         {/* +more */}
                         <FeaturePill
                           dashed
                           label="+ Custom"
-                          className="h-[20px] justify-center group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.25s]"
+                          className="h-[20px] justify-center group-hover/card:animate-[icon-bounce_0.4s_ease-out_0.3s]"
                         />
                       </div>
                     )}
