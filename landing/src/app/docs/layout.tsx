@@ -283,9 +283,6 @@ export default function Layout({ children }: { children: ReactNode }) {
           title: (
             <div className="flew-row flex items-center">
               <LogoLockup className="h-4.5" />
-              <span className="text-foreground/50 mb-[5px] ml-2.5 scale-110 leading-none font-normal">
-                docs
-              </span>
             </div>
           ),
           url: "/",
