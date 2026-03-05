@@ -9,7 +9,8 @@ Core lib:
 
 Other:
 
-- add [soon] badges in docs on providers
+- add creem triangle in features unified api
+- docs code blocks having different styles and theme
 - make search icon smaller
 - design proper OG image in Figma
 - fix multiple H1 tags on landing

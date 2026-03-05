@@ -488,6 +488,13 @@ button[aria-label="Collapse Sidebar"] svg {
   display: none !important;
 }
 
+/* Disabled sidebar items (url="#") */
+#nd-sidebar [data-radix-scroll-area-viewport] a[href="#"],
+#nd-sidebar-mobile [data-radix-scroll-area-viewport] a[href="#"] {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
 input[type="search"]::-webkit-search-cancel-button,
 input[type="search"]::-webkit-search-decoration,
 input[type="search"]::-webkit-search-results-button,

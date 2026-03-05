@@ -22,6 +22,8 @@ const pageIcons = {
   "basic usage": <Coins className="docs-category-icon size-3! shrink-0" />,
 } as const;
 
+const enabledProviders = new Set(["stripe"]);
+
 const providerPageIcons = {
   stripe: (
     <svg
@@ -150,6 +152,10 @@ function getCategoryIcon(name: string): ReactElement | undefined {
   return categoryIcons[name.toLowerCase() as keyof typeof categoryIcons];
 }
 
+function isProviderPage(name: string): boolean {
+  return name.toLowerCase() in providerPageIcons;
+}
+
 function getPageIcon(name: string): ReactElement | undefined {
   const key = name.toLowerCase();
   return (
@@ -205,13 +211,29 @@ function groupCategories(nodes: PageTree.Node[]): PageTree.Node[] {
         : node;
 
     if (mappedNode.type === "page") {
-      const icon = typeof mappedNode.name === "string" ? getPageIcon(mappedNode.name) : undefined;
+      const nameStr = typeof mappedNode.name === "string" ? mappedNode.name : "";
+      const icon = nameStr ? getPageIcon(nameStr) : undefined;
       if (icon) {
         (
           mappedNode as PageTree.Item & {
             icon?: ReactElement;
           }
         ).icon = icon;
+      }
+
+      if (nameStr && isProviderPage(nameStr) && !enabledProviders.has(nameStr.toLowerCase())) {
+        mappedNode = {
+          ...mappedNode,
+          name: (
+            <span className="flex w-full items-center">
+              {nameStr}
+              <span className="bg-fd-muted text-fd-muted-foreground ml-auto rounded px-1.5 py-0.5 text-[10px] leading-none font-medium">
+                SOON
+              </span>
+            </span>
+          ),
+          url: "#",
+        };
       }
     }
 
