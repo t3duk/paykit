@@ -9,7 +9,9 @@ Core lib:
 
 Other:
 
-- set shadcn radius to small
+- add creem in docs
+- add [soon] badges in docs on providers
+- design proper OG image in Figma
 - fix multiple H1 tags on landing
 - separate /docs styles to docs.css
 - improve structure for landing page sections (use /sections)
