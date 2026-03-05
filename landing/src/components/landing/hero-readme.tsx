@@ -299,14 +299,14 @@ export function HeroReadMe() {
                     }}
                     className={cn(
                       "group/card relative p-4 lg:p-5 border-foreground/[0.1] min-h-[180px] transition-all duration-200 hover:bg-foreground/[0.02] hover:shadow-[inset_0_1px_0_0_rgba(128,128,128,0.1)] hover:z-10",
-                      // Bottom border: all except last row (3x2: last row starts at 3)
+                      // Bottom border: remove for last row at each breakpoint
                       i < 5 && "border-b",
-                      i >= 3 && "md:border-b-0",
+                      i >= 4 && "sm:border-b-0",
+                      i < 3 ? "md:border-b" : "md:border-b-0",
                       // Right border: 2-col layout
                       i % 2 === 0 && i < 5 && "sm:border-r",
-                      // 3-col: right border except on 3rd column
-                      i % 3 !== 2 && "md:border-r",
-                      i % 2 !== 0 && i % 3 === 2 && "md:border-r-0",
+                      // 3-col: right border for cols 1 & 2, remove for col 3
+                      i % 3 !== 2 ? "md:border-r" : "md:border-r-0",
                     )}
                   >
                     {/* Arrow icon — top right, visible on hover */}
