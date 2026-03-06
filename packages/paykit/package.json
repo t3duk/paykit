@@ -18,5 +18,22 @@
     "type": "git",
     "url": "git+https://github.com/getpaykit/paykit.git"
   },
-  "type": "module"
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./handlers/next-js": {
+      "types": "./src/handlers/next-js/index.ts",
+      "default": "./src/handlers/next-js/index.ts"
+    }
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^4.0.18"
+  }
 }
