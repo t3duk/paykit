@@ -495,7 +495,7 @@ export function ServerClientTabs() {
 
   return (
     <div className="relative">
-      <div className="dark:bg-background border-foreground/[0.1] relative overflow-hidden rounded-xl border bg-neutral-50">
+      <div className="dark:bg-background border-foreground/[0.1] relative overflow-hidden rounded-sm border bg-neutral-50">
         <div className="border-foreground/[0.08] dark:bg-card/50 flex border-b bg-neutral-100/50">
           <button
             type="button"
@@ -558,7 +558,7 @@ export function CodeExamplesSection() {
         provider you use.
       </p>
 
-      <div className="border-foreground/[0.1] dark:bg-background/40 overflow-hidden rounded-xl border bg-neutral-50/50">
+      <div className="border-foreground/[0.1] dark:bg-background/40 overflow-hidden rounded-sm border bg-neutral-50/50">
         <div className="border-foreground/[0.09] dark:bg-card/50 no-scrollbar flex overflow-x-auto border-b bg-neutral-100/50">
           {tabs.map((tab) => (
             <button

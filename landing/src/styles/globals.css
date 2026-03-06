@@ -526,7 +526,7 @@ input[type="search"]::-webkit-search-results-decoration {
 .dark .shiki {
   background-color: var(--card) !important;
   border-color: rgba(255, 255, 255, 0.06);
-  border-radius: var(--radius-xl) !important;
+  border-radius: var(--radius-sm) !important;
 }
 
 /* Tab/card wrappers containing code blocks */
@@ -535,7 +535,7 @@ input[type="search"]::-webkit-search-results-decoration {
 .dark div:has(> [role="tablist"]):has(.shiki) {
   background-color: var(--card) !important;
   border-color: rgba(255, 255, 255, 0.06);
-  border-radius: var(--radius-xl) !important;
+  border-radius: var(--radius-sm) !important;
 }
 
 /* Override when keepBackground is enabled */
@@ -550,13 +550,13 @@ input[type="search"]::-webkit-search-results-decoration {
 .dark [role="tablist"]:has(+ div .shiki) {
   background: transparent;
   border-color: rgba(255, 255, 255, 0.06);
-  border-radius: var(--radius-lg) !important;
+  border-radius: var(--radius-sm) !important;
 }
 
 /* Tab content panel background */
 .dark [role="tabpanel"]:has(.shiki) {
   background-color: var(--card) !important;
-  border-radius: var(--radius-xl) !important;
+  border-radius: var(--radius-sm) !important;
 }
 
 /* Code block inside tabs — match parent, no extra border/shadow */
@@ -564,7 +564,7 @@ input[type="search"]::-webkit-search-results-decoration {
   background-color: var(--card) !important;
   border: none;
   box-shadow: none;
-  border-radius: var(--radius-xl) !important;
+  border-radius: var(--radius-sm) !important;
 }
 
 /* Code block content viewport — force near-black in dark mode */
@@ -586,19 +586,19 @@ figure:has(.shiki),
 figure.shiki,
 [data-slot="tabs"]:has(.shiki),
 .bg-fd-card:has(.shiki) {
-  border-radius: var(--radius-xl) !important;
+  border-radius: var(--radius-sm) !important;
   overflow: hidden;
 }
 
 figure.shiki > div:first-child,
 [role="tablist"]:has(+ [role="tabpanel"] .shiki),
 [role="tablist"]:has(+ div .shiki) {
-  border-radius: var(--radius-lg) !important;
+  border-radius: var(--radius-sm) !important;
 }
 
 [role="tabpanel"]:has(.shiki),
 [role="tabpanel"] .shiki {
-  border-radius: var(--radius-xl) !important;
+  border-radius: var(--radius-sm) !important;
 }
 
 /* Respect prefers-reduced-motion for accessibility (WCAG 2.3.3) */
