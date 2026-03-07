@@ -1,6 +1,6 @@
 import type { PayKitContext } from "../core/context";
 import { PayKitError } from "../core/errors";
-import { deleteCustomerByReferenceId, syncCustomer } from "../domain/services/customer-service";
+import { deleteCustomerByReferenceId, syncCustomer } from "../services/customer-service";
 import type { NormalizedWebhookEvent, WebhookApplyAction } from "../types/events";
 
 export interface HandleWebhookInput {

@@ -1,11 +1,11 @@
-import { createCheckout } from "../domain/services/checkout-service";
-import { syncCustomer } from "../domain/services/customer-service";
+import { createCheckout } from "../services/checkout-service";
+import { syncCustomer } from "../services/customer-service";
 import {
   attachPaymentMethod,
   detachPaymentMethod,
   listPaymentMethods,
   setDefaultPaymentMethod,
-} from "../domain/services/payment-method-service";
+} from "../services/payment-method-service";
 import type { CustomerIdentity, ScopedPayKitInstance } from "../types/instance";
 import type { PayKitContext } from "./context";
 

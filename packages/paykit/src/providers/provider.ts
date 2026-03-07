@@ -1,4 +1,4 @@
-import type { NormalizedWebhookEvent } from "../../types/events";
+import type { NormalizedWebhookEvent } from "../types/events";
 
 export interface ProviderPaymentMethod {
   providerMethodId: string;
@@ -12,8 +12,15 @@ export interface ProviderPaymentMethod {
 export interface PayKitProvider<TId extends string = string> {
   id: TId;
 
+  upsertCustomer(data: {
+    referenceId: string;
+    email?: string;
+    name?: string;
+    metadata?: Record<string, string>;
+  }): Promise<{ providerCustomerId: string }>;
+
   checkout(data: {
-    customerId: string;
+    providerCustomerId: string;
     amount: number;
     description: string;
     successURL: string;
@@ -22,9 +29,12 @@ export interface PayKitProvider<TId extends string = string> {
     metadata?: Record<string, string>;
   }): Promise<{ url: string }>;
 
-  attachPaymentMethod(data: { customerId: string; returnURL: string }): Promise<{ url: string }>;
+  attachPaymentMethod(data: {
+    providerCustomerId: string;
+    returnURL: string;
+  }): Promise<{ url: string }>;
 
-  detachPaymentMethod(data: { customerId: string; providerMethodId: string }): Promise<void>;
+  detachPaymentMethod(data: { providerMethodId: string }): Promise<void>;
 
   handleWebhook(data: {
     body: unknown;

@@ -1,5 +1,6 @@
-import type { DatabaseAdapter } from "../domain/ports/database";
-import type { PayKitProvider } from "../domain/ports/provider";
+import type { Pool } from "pg";
+
+import type { PayKitProvider } from "../providers/provider";
 import type { PayKitEventHandler } from "./events";
 
 export type ProviderId<TProviders extends readonly PayKitProvider[]> = TProviders[number]["id"];
@@ -7,7 +8,7 @@ export type ProviderId<TProviders extends readonly PayKitProvider[]> = TProvider
 export interface PayKitOptions<
   TProviders extends readonly PayKitProvider[] = readonly PayKitProvider[],
 > {
-  database: DatabaseAdapter;
+  database: Pool;
   providers: TProviders;
   logger?: {
     debug: (message: string, ...args: unknown[]) => void;

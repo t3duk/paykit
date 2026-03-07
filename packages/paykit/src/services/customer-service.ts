@@ -1,0 +1,175 @@
+import { and, eq, isNull } from "drizzle-orm";
+
+import type { PayKitContext } from "../core/context";
+import { PayKitError } from "../core/errors";
+import { generateId } from "../core/utils";
+import type { PayKitDatabase } from "../database/postgres/database";
+import { customer, providerCustomer } from "../database/postgres/schema";
+import type { Customer, ProviderCustomer } from "../types/models";
+
+function anonymizedEmail(id: string): string {
+  return `deleted+${id}@paykit.local`;
+}
+
+export interface SyncCustomerInput {
+  referenceId: string;
+  email?: string;
+  name?: string;
+  metadata?: Record<string, string>;
+}
+
+export async function syncCustomer(
+  database: PayKitDatabase,
+  input: SyncCustomerInput,
+): Promise<Customer> {
+  const now = new Date();
+  const existing = await database.query.customer.findFirst({
+    where: eq(customer.referenceId, input.referenceId),
+  });
+
+  if (existing) {
+    const rows = await database
+      .update(customer)
+      .set({
+        email: input.email ?? existing.email ?? null,
+        name: input.name ?? existing.name ?? null,
+        metadata: input.metadata ?? existing.metadata ?? null,
+        deletedAt: null,
+        updatedAt: now,
+      })
+      .where(eq(customer.id, existing.id))
+      .returning();
+
+    const row = rows[0];
+    if (!row) {
+      throw new Error("Failed to update customer.");
+    }
+    return row;
+  }
+
+  const rows = await database
+    .insert(customer)
+    .values({
+      id: generateId("cust"),
+      referenceId: input.referenceId,
+      email: input.email ?? null,
+      name: input.name ?? null,
+      metadata: input.metadata ?? null,
+      deletedAt: null,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+
+  const row = rows[0];
+  if (!row) {
+    throw new Error("Failed to create customer.");
+  }
+  return row;
+}
+
+export async function getCustomerByReferenceId(
+  database: PayKitDatabase,
+  referenceId: string,
+): Promise<Customer | null> {
+  return (
+    (await database.query.customer.findFirst({
+      where: and(eq(customer.referenceId, referenceId), isNull(customer.deletedAt)),
+    })) ?? null
+  );
+}
+
+export async function getCustomerById(
+  database: PayKitDatabase,
+  customerId: string,
+): Promise<Customer | null> {
+  return (
+    (await database.query.customer.findFirst({
+      where: and(eq(customer.id, customerId), isNull(customer.deletedAt)),
+    })) ?? null
+  );
+}
+
+export async function getProviderCustomer(
+  database: PayKitDatabase,
+  input: { customerId: string; providerId: string },
+): Promise<ProviderCustomer | null> {
+  return (
+    (await database.query.providerCustomer.findFirst({
+      where: and(
+        eq(providerCustomer.customerId, input.customerId),
+        eq(providerCustomer.providerId, input.providerId),
+      ),
+    })) ?? null
+  );
+}
+
+export async function upsertProviderCustomer<TProviderId extends string>(
+  ctx: PayKitContext<TProviderId>,
+  input: { customerId: string; providerId: TProviderId },
+): Promise<ProviderCustomer> {
+  return ctx.database.transaction(async (tx) => {
+    const customer = await getCustomerById(tx, input.customerId);
+    if (!customer) {
+      throw new PayKitError("CUSTOMER_NOT_FOUND");
+    }
+
+    const existing = await getProviderCustomer(tx, input);
+    if (existing) {
+      return existing;
+    }
+
+    const provider = ctx.providers.get(input.providerId);
+    if (!provider) {
+      throw new PayKitError("PROVIDER_NOT_FOUND");
+    }
+
+    const { providerCustomerId } = await provider.upsertCustomer({
+      referenceId: customer.referenceId,
+      email: customer.email ?? undefined,
+      name: customer.name ?? undefined,
+      metadata: customer.metadata ?? undefined,
+    });
+
+    const rows = await tx
+      .insert(providerCustomer)
+      .values({
+        id: generateId("pa"),
+        customerId: customer.id,
+        providerId: input.providerId,
+        providerCustomerId,
+        createdAt: new Date(),
+      })
+      .returning();
+
+    const row = rows[0];
+    if (!row) {
+      throw new Error("Failed to create provider customer.");
+    }
+    return row;
+  });
+}
+
+export async function deleteCustomerByReferenceId(
+  database: PayKitDatabase,
+  referenceId: string,
+): Promise<void> {
+  const existingCustomer = await database.query.customer.findFirst({
+    where: and(eq(customer.referenceId, referenceId), isNull(customer.deletedAt)),
+  });
+
+  if (!existingCustomer) {
+    throw new PayKitError("CUSTOMER_NOT_FOUND");
+  }
+
+  await database
+    .update(customer)
+    .set({
+      email: anonymizedEmail(existingCustomer.id),
+      name: "Deleted Customer",
+      metadata: null,
+      deletedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(customer.id, existingCustomer.id));
+}

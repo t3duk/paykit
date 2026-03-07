@@ -1,16 +1,16 @@
-import type { PayKitProvider } from "../domain/ports/provider";
-import { createCheckout } from "../domain/services/checkout-service";
+import type { PayKitProvider } from "../providers/provider";
+import { createCheckout } from "../services/checkout-service";
 import {
   deleteCustomerByReferenceId,
   getCustomerByReferenceId,
   syncCustomer,
-} from "../domain/services/customer-service";
+} from "../services/customer-service";
 import {
   attachPaymentMethod,
   detachPaymentMethod,
   listPaymentMethods,
   setDefaultPaymentMethod,
-} from "../domain/services/payment-method-service";
+} from "../services/payment-method-service";
 import type { PayKitInstance } from "../types/instance";
 import type { PayKitOptions, ProviderId } from "../types/options";
 import { handleWebhook } from "../webhook/handle-webhook";

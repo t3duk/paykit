@@ -23,3 +23,11 @@ export interface PaymentMethod {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface ProviderCustomer {
+  id: string;
+  customerId: string;
+  providerId: string;
+  providerCustomerId: string;
+  createdAt: Date;
+}

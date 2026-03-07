@@ -1,10 +1,14 @@
-import { generateId } from "../core/id";
-import { defineProvider } from "../domain/ports/provider";
+import { generateId } from "../core/utils";
+import { defineProvider } from "../providers/provider";
 import type { NormalizedWebhookEvent } from "../types/events";
 
 export function mockProvider() {
   return defineProvider({
     id: "mock",
+
+    async upsertCustomer(data) {
+      return { providerCustomerId: `mock_cust_${data.referenceId}` };
+    },
 
     async checkout() {
       return { url: "https://example.com/checkout/mock" };

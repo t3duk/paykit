@@ -1,5 +1,5 @@
-import type { DatabaseAdapter } from "../domain/ports/database";
-import type { PayKitProvider } from "../domain/ports/provider";
+import { createPostgresDatabase, type PayKitDatabase } from "../database/postgres/database";
+import type { PayKitProvider } from "../providers/provider";
 import type { PayKitEventHandler } from "../types/events";
 import type { PayKitOptions, ProviderId } from "../types/options";
 
@@ -15,7 +15,7 @@ export interface PayKitContext<
   TProviders extends readonly PayKitProvider[] = readonly PayKitProvider[],
 > {
   options: PayKitOptions<TProviders>;
-  database: DatabaseAdapter;
+  database: PayKitDatabase;
   providers: Map<TProviderId, PayKitProvider>;
   logger: {
     debug: (message: string, ...args: unknown[]) => void;
@@ -26,9 +26,9 @@ export interface PayKitContext<
   eventHandlers: Record<string, PayKitEventHandler>;
 }
 
-export function createContext<const TProviders extends readonly PayKitProvider[]>(
+export async function createContext<const TProviders extends readonly PayKitProvider[]>(
   options: PayKitOptions<TProviders>,
-): PayKitContext<ProviderId<TProviders>, TProviders> {
+): Promise<PayKitContext<ProviderId<TProviders>, TProviders>> {
   if (options.providers.length === 0) {
     throw new Error("At least one provider is required");
   }
@@ -37,9 +37,11 @@ export function createContext<const TProviders extends readonly PayKitProvider[]
     providers.set(provider.id as ProviderId<TProviders>, provider);
   }
 
+  const database = await createPostgresDatabase(options.database);
+
   return {
     options,
-    database: options.database,
+    database,
     providers,
     logger: options.logger ?? noopLogger,
     eventHandlers: options.on ?? {},
