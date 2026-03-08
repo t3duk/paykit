@@ -20,9 +20,13 @@ export default async function Page({ params }: DocsPageProps) {
   if (!page) notFound();
 
   const MDXContent = page.data.body;
+  const showBreadcrumb = (slug?.length ?? 0) >= 3;
 
   return (
     <DocsPage
+      breadcrumb={{
+        enabled: showBreadcrumb,
+      }}
       toc={page.data.toc}
       full={page.data.full}
       tableOfContent={{

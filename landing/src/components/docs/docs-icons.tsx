@@ -5,7 +5,6 @@ import {
   BookOpen,
   Code2,
   Coins,
-  Compass,
   CreditCard,
   Database,
   Download,
@@ -27,7 +26,6 @@ const categoryIcons = {
   features: <Blocks className="docs-category-icon size-3! shrink-0" />,
   providers: <CreditCard className="docs-category-icon size-3! shrink-0" />,
   code: <Code2 className="docs-category-icon size-3! shrink-0" />,
-  guides: <Compass className="docs-category-icon size-3! shrink-0" />,
 } as const;
 
 const pageIcons = {
@@ -190,13 +188,13 @@ export function isEnabledProviderPage(name: string): boolean {
 
 export function CategoryFolderIcon({ icon }: { icon?: ReactElement }) {
   return (
-    <>
+    <span className="contents">
       {icon}
       <HugeiconsIcon
         icon={ArrowDown01Icon}
         strokeWidth={2}
         className="docs-category-chevron pointer-events-none absolute top-1/2 right-5 size-4 -translate-y-1/2 transition-transform duration-150"
       />
-    </>
+    </span>
   );
 }

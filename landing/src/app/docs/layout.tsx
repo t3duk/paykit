@@ -1,5 +1,6 @@
 import type * as PageTree from "fumadocs-core/page-tree";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
+import { cloneElement } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import {
@@ -18,6 +19,20 @@ import { source } from "@/lib/source";
 
 function normalizeName(name: string): string {
   return name.toLowerCase().replaceAll("-", " ").trim();
+}
+
+function withPageLabel(name: string, icon?: ReactElement, badge?: ReactNode): ReactNode {
+  if (!icon && badge === undefined) {
+    return name;
+  }
+
+  return (
+    <span key={`label-${name}`} className="flex w-full items-center gap-2">
+      {icon ? <span className="shrink-0">{icon}</span> : null}
+      <span className="min-w-0 truncate">{name}</span>
+      {badge !== undefined ? <span className="ml-auto flex shrink-0">{badge}</span> : null}
+    </span>
+  );
 }
 
 function withCategoryFolderDefaults(node: PageTree.Node): PageTree.Node {
@@ -67,28 +82,29 @@ function groupCategories(nodes: PageTree.Node[]): PageTree.Node[] {
 
     if (mappedNode.type === "page") {
       const nameStr = typeof mappedNode.name === "string" ? mappedNode.name : "";
-      const icon = nameStr ? getDocsPageIcon(nameStr) : undefined;
-
-      if (icon) {
-        (
-          mappedNode as PageTree.Item & {
-            icon?: ReactElement;
-          }
-        ).icon = icon;
-      }
+      const icon =
+        nameStr && getDocsPageIcon(nameStr)
+          ? cloneElement(getDocsPageIcon(nameStr) as ReactElement, {
+              key: `icon-${nameStr}`,
+            })
+          : undefined;
 
       if (nameStr && isProviderPage(nameStr) && !isEnabledProviderPage(nameStr)) {
         mappedNode = {
           ...mappedNode,
-          name: (
-            <span className="flex w-full items-center">
-              {nameStr}
-              <span className="bg-fd-muted text-fd-muted-foreground ml-auto rounded px-1.5 py-0.5 text-[10px] leading-none font-medium">
-                SOON
-              </span>
-            </span>
+          name: withPageLabel(
+            nameStr,
+            icon,
+            <span className="bg-fd-muted text-fd-muted-foreground rounded px-1.5 py-0.5 text-[10px] leading-none font-medium">
+              SOON
+            </span>,
           ),
           url: "#",
+        };
+      } else if (icon) {
+        mappedNode = {
+          ...mappedNode,
+          name: withPageLabel(nameStr, icon),
         };
       }
     }
