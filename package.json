@@ -38,5 +38,16 @@
   "engines": {
     "node": ">=22"
   },
-  "packageManager": "pnpm@10.4.1"
+  "packageManager": "pnpm@10.4.1",
+  "worktree-up": {
+    "copy": [
+      "**/.env",
+      "**/.env.local",
+      "**/settings.local.json",
+      "team-docs"
+    ],
+    "run": [
+      "pnpm install"
+    ]
+  }
 }
