@@ -5,12 +5,14 @@ import {
   BookOpen,
   Code2,
   Coins,
+  Compass,
   CreditCard,
   Database,
   Download,
   ReceiptText,
   Rocket,
   Server,
+  Sparkles,
   ShoppingCart,
   UsersRound,
   WalletCards,
@@ -22,10 +24,10 @@ import { FaReact } from "react-icons/fa";
 import { CreemIcon } from "@/components/icons/creem";
 
 const categoryIcons = {
-  "get started": <Rocket className="docs-category-icon size-3! shrink-0" />,
-  features: <Blocks className="docs-category-icon size-3! shrink-0" />,
-  providers: <CreditCard className="docs-category-icon size-3! shrink-0" />,
-  code: <Code2 className="docs-category-icon size-3! shrink-0" />,
+  "get started": <Compass className="docs-category-icon size-3.5! shrink-0" />,
+  features: <Blocks className="docs-category-icon size-3.5! shrink-0" />,
+  providers: <CreditCard className="docs-category-icon size-3.5! shrink-0" />,
+  code: <Code2 className="docs-category-icon size-3.5! shrink-0" />,
 } as const;
 
 const pageIcons = {
