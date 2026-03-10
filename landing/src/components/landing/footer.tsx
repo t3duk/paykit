@@ -2,6 +2,7 @@ import { Github } from "lucide-react";
 import Link from "next/link";
 
 import { Icons } from "@/components/icons";
+import { AskAiCluster } from "@/components/landing/ask-ai-cluster";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { URLs } from "@/lib/consts";
 
@@ -40,31 +41,35 @@ export default function Footer() {
         }}
       />
 
-      <div className="relative space-y-5 px-5 py-6 sm:px-6 lg:px-10 lg:py-8">
-        <div className="flex items-center justify-between">
-          <span className="text-foreground/20 font-mono text-xs">
-            © {new Date().getFullYear()} PayKit
-          </span>
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Link
-              href={URLs.x}
-              aria-label="Twitter/X"
-              className="text-foreground/30 hover:text-foreground/60 transition-colors"
-            >
-              <Icons.XIcon className="h-3 w-3" />
-            </Link>
-            <Link
-              href={URLs.githubOrg}
-              aria-label="GitHub"
-              className="text-foreground/30 hover:text-foreground/60 transition-colors"
-            >
-              <Github className="h-4 w-4" />
-            </Link>
-            <div className="text-foreground/15 flex h-4 w-4 items-center justify-center select-none">
-              |
-            </div>
-            <div className="-ml-4 sm:-ml-5">
-              <ThemeToggle />
+      <div className="relative px-5 py-8 sm:px-6 lg:px-10 lg:py-10">
+        <div className="mx-auto flex max-w-6xl flex-col items-center gap-8">
+          <AskAiCluster />
+
+          <div className="border-foreground/[0.06] flex w-full max-w-6xl flex-col gap-4 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <span className="text-foreground/20 font-mono text-xs">
+              © {new Date().getFullYear()} PayKit
+            </span>
+            <div className="flex items-center gap-3 sm:gap-4">
+              <Link
+                href={URLs.x}
+                aria-label="Twitter/X"
+                className="text-foreground/30 hover:text-foreground/60 transition-colors"
+              >
+                <Icons.XIcon className="h-3 w-3" />
+              </Link>
+              <Link
+                href={URLs.githubOrg}
+                aria-label="GitHub"
+                className="text-foreground/30 hover:text-foreground/60 transition-colors"
+              >
+                <Github className="h-4 w-4" />
+              </Link>
+              <div className="text-foreground/15 flex h-4 w-4 items-center justify-center select-none">
+                |
+              </div>
+              <div className="-ml-4 sm:-ml-5">
+                <ThemeToggle />
+              </div>
             </div>
           </div>
         </div>

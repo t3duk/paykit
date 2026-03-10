@@ -12,6 +12,7 @@ import { URLs } from "@/lib/consts";
 import { cn } from "@/lib/utils";
 
 import { ProvidersSection } from "../sections/providers-section";
+import { AskAiCluster } from "./ask-ai-cluster";
 import { useEarlyDevDialog } from "./early-dev-dialog";
 import { CodeExamplesSection, ServerClientTabs } from "./framework-sections";
 
@@ -127,6 +128,10 @@ function ReadmeFooter() {
 
       {/* Footer */}
       <div className="border-foreground/6 relative mt-10 border-t border-dashed pt-6">
+        <div className="mb-8">
+          <AskAiCluster />
+        </div>
+
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">
             {footerLinks.map((link, i) => (
