@@ -355,9 +355,11 @@ html:not([data-anchor-scrolling]) {
   overflow-wrap: anywhere;
 }
 
-/* Fumadocs sidebar collapse trigger icon */
-button[aria-label="Collapse Sidebar"] svg {
-  @apply size-4;
+#nd-sidebar
+  > div.flex.flex-col.gap-3.p-4.pb-2
+  > div:first-child
+  > button[aria-label="Collapse Sidebar"]:not(.docs-sidebar-collapse-button) {
+  display: none;
 }
 
 /* Fumadocs sidebar: edge-to-edge item rows with explicit horizontal padding */
@@ -387,12 +389,17 @@ button[aria-label="Collapse Sidebar"] svg {
 
 #nd-sidebar > div.flex.flex-col.border-t.p-4.pt-2:has(.docs-sidebar-github-button),
 #nd-sidebar-mobile > div.flex.flex-col.border-t.p-4.pt-2:has(.docs-sidebar-github-button) {
-  @apply flex flex-row items-center justify-start gap-2;
+  @apply flex flex-row items-center justify-start gap-2 pt-2 pb-3;
 }
 
 #nd-sidebar .docs-sidebar-github-button,
 #nd-sidebar-mobile .docs-sidebar-github-button {
   @apply rounded-[var(--radius)] border-0;
+}
+
+#nd-sidebar > div.flex.flex-col.border-t.p-4.pt-2 > div:last-child > :is(a, button),
+#nd-sidebar-mobile > div.flex.flex-col.border-t.p-4.pt-2 > div:last-child > :is(a, button) {
+  @apply size-7 rounded-md;
 }
 
 #nd-sidebar,
@@ -533,7 +540,8 @@ button[aria-label="Collapse Sidebar"] svg {
 
 #nd-sidebar > div.flex.flex-col.gap-3.p-4.pb-2 > div:first-child,
 #nd-sidebar-mobile > div.flex.flex-col.gap-3.p-4.pb-2 > div:first-child {
-  padding-inline: 1.25rem;
+  padding-inline-start: 1.25rem;
+  padding-inline-end: 1rem;
 }
 
 #nd-sidebar [data-search-full],

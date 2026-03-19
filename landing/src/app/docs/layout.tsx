@@ -11,6 +11,7 @@ import {
   isEnabledProviderPage,
   isProviderPage,
 } from "@/components/docs/docs-icons";
+import { SidebarCollapseButton } from "@/components/docs/sidebar-collapse-button";
 import { SidebarCategoryAccordion } from "@/components/docs/sidebar-category-accordion";
 import { LogoLockup } from "@/components/icons/logo";
 import { ThemeSwitcher } from "@/components/theme-switcher";
@@ -173,6 +174,7 @@ export default function Layout({ children }: { children: ReactNode }) {
           ),
         }}
         nav={{
+          children: <SidebarCollapseButton />,
           title: (
             <div className="flew-row flex items-center">
               <LogoLockup className="h-4.5" />
