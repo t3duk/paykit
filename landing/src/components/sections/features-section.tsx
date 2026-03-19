@@ -8,7 +8,6 @@ import type { ReactNode } from "react";
 import { CreemIcon } from "@/components/icons/creem";
 import { cn } from "@/lib/utils";
 
-import { useEarlyDevDialog } from "../landing/early-dev-dialog";
 import { featureCards, type FeatureVariant } from "./features-content";
 import { ProvidersSection } from "./providers-section";
 
@@ -285,8 +284,6 @@ function FeatureVariantContent({ variant }: { variant: FeatureVariant }) {
 }
 
 export function FeaturesSection() {
-  const { open: openEarlyDevDialog } = useEarlyDevDialog();
-
   return (
     <>
       <div className="my-4 flex items-center gap-3">
@@ -307,15 +304,7 @@ export function FeaturesSection() {
 
       <div className="border-foreground/10 relative mb-2 grid grid-cols-1 overflow-hidden border sm:grid-cols-2 md:grid-cols-3">
         {featureCards.map((feature, i) => (
-          <Link
-            key={feature.label}
-            href={feature.href}
-            onClick={(e) => {
-              e.preventDefault();
-              openEarlyDevDialog();
-            }}
-            className="contents"
-          >
+          <Link key={feature.label} href={feature.href} className="contents">
             <motion.div
               whileHover={{
                 y: -2,
