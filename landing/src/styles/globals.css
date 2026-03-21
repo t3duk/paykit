@@ -537,6 +537,42 @@ html:not([data-anchor-scrolling]) {
   border-top: 1px solid var(--border);
 }
 
+/* Expanded category trigger: add divider below the trigger, not above the content */
+#nd-sidebar
+  [data-radix-scroll-area-viewport]
+  > div
+  > [data-state="open"]
+  > button[aria-expanded="true"]:not(
+    [data-slot="dropdown-menu-trigger"]
+  ).flex.flex-row.items-center.gap-2,
+#nd-sidebar-mobile
+  [data-radix-scroll-area-viewport]
+  > div
+  > [data-state="open"]
+  > button[aria-expanded="true"]:not(
+    [data-slot="dropdown-menu-trigger"]
+  ).flex.flex-row.items-center.gap-2 {
+  @apply relative;
+}
+
+#nd-sidebar
+  [data-radix-scroll-area-viewport]
+  > div
+  > [data-state="open"]
+  > button[aria-expanded="true"]:not(
+    [data-slot="dropdown-menu-trigger"]
+  ).flex.flex-row.items-center.gap-2::after,
+#nd-sidebar-mobile
+  [data-radix-scroll-area-viewport]
+  > div
+  > [data-state="open"]
+  > button[aria-expanded="true"]:not(
+    [data-slot="dropdown-menu-trigger"]
+  ).flex.flex-row.items-center.gap-2::after {
+  content: "";
+  @apply border-border pointer-events-none absolute right-0 bottom-0 left-0 border-b;
+}
+
 /* Sidebar search row: full width like category rows */
 #nd-sidebar > div.flex.flex-col.gap-3.p-4.pb-2,
 #nd-sidebar-mobile > div.flex.flex-col.gap-3.p-4.pb-2 {
@@ -724,9 +760,13 @@ figure.shiki > div:first-child,
   animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1) !important;
 }
 
-#nd-sidebar [data-radix-scroll-area-viewport] > div > [data-state="open"],
-#nd-sidebar-mobile [data-radix-scroll-area-viewport] > div > [data-state="open"] {
-  padding-bottom: 0.5rem;
+#nd-sidebar [data-radix-scroll-area-viewport] > div > [data-state="open"] > div[data-state="open"],
+#nd-sidebar-mobile
+  [data-radix-scroll-area-viewport]
+  > div
+  > [data-state="open"]
+  > div[data-state="open"] {
+  @apply pt-1 pb-1;
 }
 
 #nd-sidebar [class*="animate-fd-collapsible"][data-state="closed"],
