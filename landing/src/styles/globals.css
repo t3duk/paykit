@@ -767,6 +767,7 @@ figure.shiki > div:first-child,
   > [data-state="open"]
   > div[data-state="open"] {
   @apply pt-1 pb-1;
+  /* TODO: Add border-b */
 }
 
 #nd-sidebar [class*="animate-fd-collapsible"][data-state="closed"],
