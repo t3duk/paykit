@@ -42,7 +42,7 @@ importers:
         specifier: 'catalog:'
         version: 5.9.2
 
-  apps/e2e-frontend:
+  apps/demo-app:
     dependencies:
       '@paykitjs/stripe':
         specifier: workspace:*
