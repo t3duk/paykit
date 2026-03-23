@@ -11,4 +11,10 @@ const program = new Command()
   .addCommand(migrateCommand)
   .addCommand(syncProductsCommand);
 
-await program.parseAsync(process.argv);
+try {
+  await program.parseAsync(process.argv);
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`\n  error: ${message}\n`);
+  process.exit(1);
+}

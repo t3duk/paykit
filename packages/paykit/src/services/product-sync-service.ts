@@ -36,16 +36,16 @@ export async function syncProducts(ctx: PayKitContext): Promise<SyncProductResul
         id: productDef.id,
         version: 1,
         name: productDef.name,
-        priceAmount: productDef.price.amount,
+        priceAmount: productDef.priceAmountCents,
         priceInterval,
       });
       action = "created";
-    } else if (priceChanged(existing, productDef.price.amount, priceInterval)) {
+    } else if (priceChanged(existing, productDef.priceAmountCents, priceInterval)) {
       stored = await insertProductVersion(ctx.database, {
         id: productDef.id,
         version: existing.version + 1,
         name: productDef.name,
-        priceAmount: productDef.price.amount,
+        priceAmount: productDef.priceAmountCents,
         priceInterval,
       });
       action = "created";
@@ -62,7 +62,7 @@ export async function syncProducts(ctx: PayKitContext): Promise<SyncProductResul
       const providerResult = await ctx.provider.syncProduct({
         id: productDef.id,
         name: productDef.name,
-        priceAmount: productDef.price.amount,
+        priceAmount: productDef.priceAmountCents,
         priceInterval,
         existingProviderProductId: existing?.providerProductId ?? null,
         existingProviderPriceId: action === "unchanged" ? stored.providerPriceId : null,
