@@ -1,3 +1,4 @@
+import { PayKitError } from "../../core/errors";
 import type { PayKitInstance } from "../../types/instance";
 
 interface NextRouteContext {
@@ -90,13 +91,10 @@ export function paykitHandler(paykit: Pick<PayKitInstance, "handleWebhook">): {
       return Response.json(result);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Webhook failed";
-      return Response.json(
-        {
-          code: "WEBHOOK_FAILED",
-          message,
-        },
-        { status: 400 },
-      );
+      if (error instanceof PayKitError) {
+        return Response.json({ code: error.code, message }, { status: 400 });
+      }
+      return Response.json({ code: "WEBHOOK_FAILED", message }, { status: 500 });
     }
   };
 
