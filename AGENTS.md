@@ -69,6 +69,7 @@ Enforced by oxlint, oxfmt, and TypeScript config. Follow strictly.
 
 - When asked opinion questions ("Maybe do this?", "what do you think?", "should we do X?"), **only answer** — don't make code changes unless explicitly asked!!
 - Never `git commit`, `git push`, or run database migrations without explicit approval or being asked
+- while generating a db migration, always provide --name. like pnpm db:generate --name add_product_table
 
 ## gstack
 
