@@ -21,11 +21,10 @@ export interface PayKitProvider<TId extends string = string> {
 
   checkout(data: {
     providerCustomerId: string;
-    amount: number;
-    description: string;
-    successURL: string;
-    cancelURL?: string;
-    attachMethod?: boolean;
+    providerPriceId: string;
+    mode: "payment" | "subscription";
+    successUrl: string;
+    cancelUrl?: string;
     metadata?: Record<string, string>;
   }): Promise<{ url: string }>;
 

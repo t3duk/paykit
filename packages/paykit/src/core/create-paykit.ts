@@ -1,9 +1,18 @@
-import { deleteCustomerById, getCustomerById, syncCustomer } from "../services/customer-service";
+import { createPayKitRouter, getEndpoints } from "../api";
 import type { PayKitInstance } from "../types/instance";
 import type { PayKitOptions } from "../types/options";
 import { handleWebhook } from "../webhook/handle-webhook";
 import { createContext, type PayKitContext } from "./context";
-import { attachPayKitInternalState } from "./internal";
+
+const payKitInstanceSymbol = Symbol.for("paykit.instance");
+
+export function isPayKitInstance(value: unknown): value is PayKitInstance {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    (value as Record<PropertyKey, unknown>)[payKitInstanceSymbol] === true
+  );
+}
 
 export function createPayKit(options: PayKitOptions): PayKitInstance {
   let contextPromise: Promise<PayKitContext> | undefined;
@@ -12,33 +21,40 @@ export function createPayKit(options: PayKitOptions): PayKitInstance {
     return contextPromise;
   };
 
-  const instance: PayKitInstance = {
-    customers: {
-      async create(input) {
-        const ctx = await getContext();
-        return syncCustomer(ctx.database, input);
-      },
-      async get(input) {
-        const ctx = await getContext();
-        return getCustomerById(ctx.database, input.id);
-      },
-      async delete(input) {
-        const ctx = await getContext();
-        await deleteCustomerById(ctx.database, input.id);
-      },
+  const paykit: PayKitInstance = {
+    options,
+
+    async handler(request: Request) {
+      const ctx = await getContext();
+      const router = createPayKitRouter(ctx, options);
+      return router.handler(request);
     },
+
+    get api() {
+      return getEndpoints(getContext());
+    },
+
+    async checkout(input) {
+      const api = getEndpoints(getContext());
+      return api.checkout({ body: input } as unknown as Parameters<typeof api.checkout>[0]);
+    },
+
     async handleWebhook(input) {
       const ctx = await getContext();
       return handleWebhook(ctx, input);
     },
+
     get $context() {
       return getContext();
     },
   };
 
-  return attachPayKitInternalState(instance, {
-    database: options.database,
-    provider: options.provider,
-    products: options.products ?? [],
+  Object.defineProperty(paykit, payKitInstanceSymbol, {
+    configurable: false,
+    enumerable: false,
+    value: true,
+    writable: false,
   });
+
+  return paykit;
 }

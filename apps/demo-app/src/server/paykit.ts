@@ -1,8 +1,9 @@
 import { stripe } from "@paykitjs/stripe";
 import { createPayKit, product } from "paykitjs";
-import { Pool } from "pg";
 
 import { env } from "@/env";
+import { auth } from "@/server/auth";
+import { pool } from "@/server/db";
 
 export const starterPack = product({
   id: "starter_pack",
@@ -16,12 +17,6 @@ export const proMonthly = product({
   price: { amount: 19.9, interval: "month" },
 });
 
-const globalForPool = globalThis as typeof globalThis & { paykitPool?: Pool };
-const pool = globalForPool.paykitPool ?? new Pool({ connectionString: env.DATABASE_URL });
-if (process.env.NODE_ENV !== "production") {
-  globalForPool.paykitPool = pool;
-}
-
 export const paykit = createPayKit({
   database: pool,
   provider: stripe({
@@ -29,4 +24,17 @@ export const paykit = createPayKit({
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
   }),
   products: [starterPack, proMonthly],
+  client: {
+    identify: async (request) => {
+      const session = await auth.api.getSession({ headers: request.headers });
+      if (!session) {
+        throw new Error("Not authenticated");
+      }
+      return {
+        customerId: session.user.id,
+        email: session.user.email,
+        name: session.user.name ?? undefined,
+      };
+    },
+  },
 });

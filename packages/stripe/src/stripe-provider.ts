@@ -10,41 +10,6 @@ export interface StripeProviderOptions {
 const PAYKIT_SOURCE_METADATA_KEY = "paykit_source";
 const PAYKIT_PROVIDER_CUSTOMER_METADATA_KEY = "paykit_provider_customer_id";
 
-function createCheckoutPayload(
-  data: {
-    amount: number;
-    attachMethod?: boolean;
-    cancelURL?: string;
-    description: string;
-    metadata?: Record<string, string>;
-    providerCustomerId: string;
-    successURL: string;
-  },
-  currency: string,
-): StripeSdk.Checkout.SessionCreateParams {
-  return {
-    cancel_url: data.cancelURL ?? data.successURL,
-    client_reference_id: data.providerCustomerId,
-    customer: data.providerCustomerId,
-    line_items: [
-      {
-        price_data: {
-          currency,
-          product_data: {
-            description: data.description,
-            name: data.description,
-          },
-          unit_amount: data.amount,
-        },
-        quantity: 1,
-      },
-    ],
-    metadata: data.metadata,
-    mode: "payment",
-    payment_intent_data: data.attachMethod ? { setup_future_usage: "off_session" } : undefined,
-    success_url: data.successURL,
-  };
-}
 
 function getStripeCustomerId(
   customer: string | StripeSdk.Customer | StripeSdk.DeletedCustomer | null,
@@ -415,7 +380,14 @@ export function createStripeProvider(client: StripeSdk, options: StripeProviderO
     },
 
     async checkout(data) {
-      const session = await client.checkout.sessions.create(createCheckoutPayload(data, currency));
+      const session = await client.checkout.sessions.create({
+        customer: data.providerCustomerId,
+        line_items: [{ price: data.providerPriceId, quantity: 1 }],
+        mode: data.mode,
+        success_url: data.successUrl,
+        cancel_url: data.cancelUrl ?? data.successUrl,
+        metadata: data.metadata,
+      });
 
       if (!session.url) {
         throw new Error("Stripe Checkout session did not include a URL.");

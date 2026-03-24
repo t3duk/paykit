@@ -1,6 +1,6 @@
-import type { PayKitInternalState } from "../../core/internal";
+import type { PayKitOptions } from "../../types/options";
 import { migrateDatabase } from "../../database";
 
-export async function runPayKitMigrations(config: { state: PayKitInternalState }): Promise<void> {
-  await migrateDatabase(config.state.database);
+export async function runPayKitMigrations(config: { options: PayKitOptions }): Promise<void> {
+  await migrateDatabase(config.options.database);
 }

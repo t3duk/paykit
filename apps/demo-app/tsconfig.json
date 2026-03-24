@@ -11,6 +11,7 @@
     "moduleDetection": "force",
     "isolatedModules": true,
     "jsx": "preserve",
+    "skipLibCheck": true,
     "lib": ["dom", "dom.iterable", "ES2022"],
     "types": ["node"],
     "plugins": [{ "name": "next" }],

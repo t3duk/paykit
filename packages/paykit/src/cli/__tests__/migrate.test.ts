@@ -77,7 +77,7 @@ describe("paykit migrate", () => {
 
     const pool = createPGlitePool(fixture.databasePath);
     const result = await pool.query("select count(*)::int as count from public.paykit_migrations");
-    expect((result.rows[0] as { count: number }).count).toBe(3);
+    expect((result.rows[0] as { count: number }).count).toBe(1);
     await pool.end();
   }, 15_000);
 
@@ -93,7 +93,7 @@ describe("paykit migrate", () => {
 
     const pool = createPGlitePool(fixture.databasePath);
     const result = await pool.query("select count(*)::int as count from public.paykit_migrations");
-    expect((result.rows[0] as { count: number }).count).toBe(3);
+    expect((result.rows[0] as { count: number }).count).toBe(1);
     await pool.end();
   }, 15_000);
 });

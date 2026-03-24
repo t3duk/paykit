@@ -1,7 +1,7 @@
 export { createPayKit } from "./core/create-paykit";
 
 export type { PayKitOptions } from "./types/options";
-export type { CustomerIdentity, PayKitInstance } from "./types/instance";
+export type { PayKitInstance } from "./types/instance";
 export type { PayKitProvider } from "./providers/provider";
 export type { Customer, StoredProduct, StoredProviderProduct } from "./types/models";
 export type { PriceInterval, Product, ProductPrice } from "./types/product";
@@ -21,3 +21,4 @@ export type {
 export { defineProvider } from "./providers/provider";
 export { PayKitError } from "./core/errors";
 export { product } from "./types/product";
+export { createPayKitEndpoint } from "./api/call";

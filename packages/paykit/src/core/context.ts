@@ -1,7 +1,6 @@
 import { createDatabase, type PayKitDatabase } from "../database/index";
 import type { PayKitProvider } from "../providers/provider";
-import type { PayKitEventHandlers } from "../types/events";
-import type { PayKitOptions } from "../types/options";
+import type { PayKitLogger, PayKitOptions } from "../types/options";
 import type { Product } from "../types/product";
 
 const noopLogger = {
@@ -16,13 +15,7 @@ export interface PayKitContext {
   database: PayKitDatabase;
   provider: PayKitProvider;
   products: Product[];
-  eventHandlers: PayKitEventHandlers;
-  logger: {
-    debug: (message: string, ...args: unknown[]) => void;
-    info: (message: string, ...args: unknown[]) => void;
-    warn: (message: string, ...args: unknown[]) => void;
-    error: (message: string, ...args: unknown[]) => void;
-  };
+  logger: PayKitLogger;
 }
 
 export async function createContext(options: PayKitOptions): Promise<PayKitContext> {
@@ -37,7 +30,6 @@ export async function createContext(options: PayKitOptions): Promise<PayKitConte
     database,
     provider: options.provider,
     products: options.products ?? [],
-    eventHandlers: options.on ?? {},
     logger: options.logger ?? noopLogger,
   };
 }

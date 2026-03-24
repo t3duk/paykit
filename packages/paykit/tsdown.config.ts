@@ -16,7 +16,8 @@ export default defineConfig({
   entry: {
     index: "src/index.ts",
     "cli/index": "src/cli/index.ts",
-    "handlers/next/index": "src/handlers/next-js/index.ts",
+    "handlers/next": "src/handlers/next.ts",
+    "client/index": "src/client/index.ts",
   },
   fixedExtension: false,
   format: "esm",

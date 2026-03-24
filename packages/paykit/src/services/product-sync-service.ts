@@ -66,8 +66,7 @@ export async function syncProducts(ctx: PayKitContext): Promise<SyncProductResul
       providerId,
     );
 
-    const needsProviderSync =
-      action !== "unchanged" || !existingProvider;
+    const needsProviderSync = action !== "unchanged" || !existingProvider;
 
     if (needsProviderSync) {
       const providerResult = await ctx.provider.syncProduct({
@@ -76,7 +75,8 @@ export async function syncProducts(ctx: PayKitContext): Promise<SyncProductResul
         priceAmount: productDef.priceAmountCents,
         priceInterval,
         existingProviderProductId: existingProvider?.providerProductId ?? null,
-        existingProviderPriceId: action === "unchanged" ? (existingProvider?.providerPriceId ?? null) : null,
+        existingProviderPriceId:
+          action === "unchanged" ? (existingProvider?.providerPriceId ?? null) : null,
       });
 
       await upsertProviderProduct(ctx.database, stored.internalId, providerId, providerResult);

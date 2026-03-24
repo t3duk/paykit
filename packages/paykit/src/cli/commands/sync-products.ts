@@ -20,11 +20,7 @@ export async function syncProductsAction(options: {
   try {
     await runPayKitMigrations(config);
 
-    const ctx = await createContext({
-      database: config.state.database,
-      provider: config.state.provider,
-      products: config.state.products,
-    });
+    const ctx = await createContext(config.options);
 
     const results = await syncProducts(ctx);
 
@@ -41,7 +37,7 @@ export async function syncProductsAction(options: {
 
     console.info(`\nSynced ${String(results.length)} product(s).`);
   } finally {
-    await config.state.database.end();
+    await config.options.database.end();
   }
 }
 

@@ -29,14 +29,19 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "dev-source": "./src/index.ts",
+      "paykit-source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
     "./handlers/next": {
-      "dev-source": "./src/handlers/next.ts",
+      "paykit-source": "./src/handlers/next.ts",
       "types": "./dist/handlers/next.d.ts",
       "default": "./dist/handlers/next.js"
+    },
+    "./client": {
+      "paykit-source": "./src/client/index.ts",
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client/index.js"
     }
   },
   "scripts": {
@@ -45,6 +50,8 @@
     "db:generate:postgres": "drizzle-kit generate --config src/database/postgres/drizzle.config.ts"
   },
   "dependencies": {
+    "@better-fetch/fetch": "^1.1.21",
+    "better-call": "^2.0.2",
     "commander": "^12.1.0",
     "dotenv": "^17.3.1",
     "drizzle-orm": "^0.45.1",

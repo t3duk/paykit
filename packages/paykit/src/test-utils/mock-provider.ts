@@ -8,8 +8,8 @@ export function mockProvider() {
       return { providerCustomerId: `mock_cus_${data.id}` };
     },
 
-    async checkout() {
-      return { url: "https://example.com/checkout/mock" };
+    async checkout(data) {
+      return { url: `https://example.com/checkout/mock?price=${data.providerPriceId}` };
     },
 
     async attachPaymentMethod(data) {

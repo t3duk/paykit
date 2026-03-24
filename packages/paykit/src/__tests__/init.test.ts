@@ -1,6 +1,6 @@
-import type { Pool } from "pg";
 import { describe, expect, it } from "vitest";
 
+import { isPayKitInstance } from "../core/create-paykit";
 import { paykitHandler } from "../handlers/next";
 import { createPayKit, defineProvider } from "../index";
 import { createMigratedTestPool, createTestPool, mockProvider } from "../test-utils/index";
@@ -12,10 +12,10 @@ describe("paykit init", () => {
       provider: mockProvider(),
     });
 
-    expect(typeof paykit.customers.create).toBe("function");
-    expect(typeof paykit.customers.get).toBe("function");
-    expect(typeof paykit.customers.delete).toBe("function");
+    expect(typeof paykit.handler).toBe("function");
+    expect(typeof paykit.checkout).toBe("function");
     expect(typeof paykit.handleWebhook).toBe("function");
+    expect(paykit.api).toBeDefined();
   });
 
   it("should expose next handler factory", () => {
@@ -27,6 +27,16 @@ describe("paykit init", () => {
     const handlers = paykitHandler(paykit);
     expect(typeof handlers.GET).toBe("function");
     expect(typeof handlers.POST).toBe("function");
+  });
+
+  it("should brand paykit instances for internal detection", () => {
+    const paykit = createPayKit({
+      database: createTestPool(),
+      provider: mockProvider(),
+    });
+
+    expect(isPayKitInstance(paykit)).toBe(true);
+    expect(isPayKitInstance({ options: paykit.options })).toBe(false);
   });
 
   it("should initialize context lazily without requiring migrations to run first", async () => {
@@ -69,55 +79,6 @@ describe("paykit init", () => {
       "paykit_product",
       "paykit_provider_customer",
     ]);
-  });
-
-  it("should sync customers with create and update on second call", async () => {
-    const pool = await createMigratedTestPool();
-    const paykit = createPayKit({
-      database: pool,
-      provider: mockProvider(),
-    });
-
-    const first = await paykit.customers.create({
-      id: "user_1",
-      email: "one@example.com",
-      name: "One",
-    });
-    const second = await paykit.customers.create({
-      id: "user_1",
-      email: "two@example.com",
-    });
-
-    expect(first.id).toBe("user_1");
-    expect(second.id).toBe("user_1");
-    expect(second.email).toBe("two@example.com");
-    expect(second.name).toBe("One");
-
-    const rows = await pool.query("select id from paykit_customer where id = $1", ["user_1"]);
-    expect(rows.rows).toHaveLength(1);
-  });
-
-  it("should get and delete customers", async () => {
-    const pool = await createMigratedTestPool();
-    const paykit = createPayKit({
-      database: pool,
-      provider: mockProvider(),
-    });
-
-    await paykit.customers.create({
-      id: "user_1",
-      email: "user@example.com",
-      name: "User",
-    });
-
-    const customer = await paykit.customers.get({ id: "user_1" });
-    expect(customer).toBeTruthy();
-    expect(customer?.email).toBe("user@example.com");
-
-    await paykit.customers.delete({ id: "user_1" });
-
-    const deleted = await paykit.customers.get({ id: "user_1" });
-    expect(deleted).toBeNull();
   });
 
   it("should pass the raw request body string to provider through the next handler", async () => {
@@ -258,27 +219,5 @@ describe("paykit init", () => {
     ]);
     expect(rows.rows).toHaveLength(1);
     expect((rows.rows[0] as { email: string }).email).toBe("webhook@example.com");
-  });
-
-  it("should fail when a database query cannot be executed", async () => {
-    const paykit = createPayKit({
-      database: {
-        connect: async () => {
-          throw new Error("db unavailable");
-        },
-        query: async () => {
-          throw new Error("db unavailable");
-        },
-      } as unknown as Pool,
-      provider: mockProvider(),
-    });
-
-    await expect(paykit.$context).resolves.toBeDefined();
-    await expect(
-      paykit.customers.create({
-        id: "user_1",
-        email: "user@example.com",
-      }),
-    ).rejects.toThrow(/Failed query|db unavailable/);
   });
 });

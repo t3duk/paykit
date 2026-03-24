@@ -16,7 +16,7 @@ export async function migrateAction(options: { config?: string; cwd: string }): 
     await runPayKitMigrations(config);
     console.info("PayKit migrations applied successfully.");
   } finally {
-    await config.state.database.end();
+    await config.options.database.end();
   }
 }
 
