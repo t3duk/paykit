@@ -1,24 +1,24 @@
+import { fileURLToPath } from "node:url";
+
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import type { Pool } from "pg";
 
-import { postgresDatabaseAdapter, type PostgresPayKitDatabase } from "./postgres/postgres.adapter";
+import * as schema from "./schema";
 
-export type PayKitDatabase = PostgresPayKitDatabase;
+export type PayKitDatabase = NodePgDatabase<typeof schema>;
 
-const databaseAdapters = [postgresDatabaseAdapter] as const;
-
-export function resolveDatabaseAdapter(database: unknown) {
-  const adapter = databaseAdapters.find((candidate) => candidate.supports(database));
-  if (!adapter) {
-    throw new Error("Unsupported PayKit database client.");
-  }
-
-  return adapter;
-}
+const migrationsSchema = "public";
+const migrationsTable = "paykit_migrations";
 
 export async function createDatabase(database: Pool): Promise<PayKitDatabase> {
-  return resolveDatabaseAdapter(database).createDatabase(database);
+  return drizzle(database, { schema });
 }
 
 export async function migrateDatabase(database: Pool): Promise<void> {
-  await resolveDatabaseAdapter(database).migrate(database);
+  await migrate(drizzle(database, { schema }), {
+    migrationsFolder: fileURLToPath(new URL("./postgres/migrations", import.meta.url)),
+    migrationsSchema,
+    migrationsTable,
+  });
 }
