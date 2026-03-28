@@ -1,22 +1,10 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Sparkle } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-
-const rotatingWords = ["TypeScript", "SaaS", "Next.js"];
 
 export function HeroTitle() {
-  const [wordIndex, setWordIndex] = useState(0);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setWordIndex((i) => (i + 1) % rotatingWords.length);
-    }, 2500);
-    return () => clearInterval(interval);
-  }, []);
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -37,19 +25,8 @@ export function HeroTitle() {
         <h1 className="max-w-4xl text-xl leading-tight tracking-tight text-neutral-800 sm:text-2xl md:text-3xl lg:text-[2.5rem] dark:text-neutral-200">
           The first billing framework <br className="hidden lg:block" />
           for{" "}
-          <span className="relative inline-flex overflow-hidden align-bottom">
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={rotatingWords[wordIndex]}
-                initial={{ y: "100%", opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: "-100%", opacity: 0 }}
-                transition={{ duration: 0.3, ease: "easeInOut" }}
-                className="border-foreground/20 inline-block border-b border-dashed"
-              >
-                {rotatingWords[wordIndex]}
-              </motion.span>
-            </AnimatePresence>
+          <span className="border-foreground/20 border-b border-dashed">
+            TypeScript
           </span>
         </h1>
 
