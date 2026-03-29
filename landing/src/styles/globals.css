@@ -116,9 +116,9 @@
   --fd-nav-height: 56px;
   --fd-banner-height: 0px;
   --fd-tocnav-height: 0px;
-  --font-sans: Geist, sans-serif;
+  --font-sans: Geist, system-ui, -apple-system, sans-serif;
   --font-serif: Georgia, serif;
-  --font-mono: Geist Mono, monospace;
+  --font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", "Cascadia Code", monospace;
   --shadow-2xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.09);
   --shadow-xs: 0px 1px 2px 0px hsl(0 0% 0% / 0.09);
   --shadow-sm: 0px 1px 2px 0px hsl(0 0% 0% / 0.18), 0px 1px 2px -1px hsl(0 0% 0% / 0.18);

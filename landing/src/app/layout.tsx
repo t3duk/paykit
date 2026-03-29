@@ -55,11 +55,12 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={cn("font-sans", geist.variable)}>
-      <body
-        className={`${geist.variable} ${fontMono.variable} ${GeistPixelSquare.variable} overflow-x-hidden font-sans antialiased`}
-        suppressHydrationWarning
-      >
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={cn(geist.variable, fontMono.variable, GeistPixelSquare.variable)}
+    >
+      <body className="overflow-x-hidden font-sans antialiased" suppressHydrationWarning>
         <Providers>{children}</Providers>
         <Analytics />
       </body>
