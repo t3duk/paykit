@@ -5,7 +5,6 @@ import Link from "next/link";
 
 import { Icons } from "@/components/icons";
 import { Section, SectionContent } from "@/components/layout/section";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { URLs } from "@/lib/consts";
 
 const footerLinks = [{ label: "Author", href: URLs.authorX }];
@@ -92,12 +91,6 @@ export function FooterSection() {
                 >
                   <Github className="h-4 w-4" />
                 </Link>
-                <div className="text-foreground/15 flex h-4 w-4 items-center justify-center select-none">
-                  |
-                </div>
-                <div className="-ml-4 sm:-ml-5">
-                  <ThemeToggle />
-                </div>
               </div>
             </div>
           </div>

@@ -9,7 +9,7 @@ export default async function MarketingLayout({ children }: { children: ReactNod
 
   return (
     <CommandMenuProvider>
-      <div className="relative h-dvh overflow-x-hidden">
+      <div className="dark bg-background text-foreground relative h-dvh overflow-x-hidden">
         <NavigationBar stars={stars} />
         <div className="absolute inset-0 overflow-x-hidden overflow-y-auto">{children}</div>
       </div>
