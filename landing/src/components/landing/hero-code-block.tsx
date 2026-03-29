@@ -130,7 +130,7 @@ export function HeroCodeBlock({
               size={"sm"}
               onClick={view === "code" ? () => void runPush() : backToCode}
               disabled={pushing}
-              className={"bg-secondary/80!"}
+              className={"not-hover:bg-secondary/80!"}
             >
               {view === "code" ? (
                 <Terminal className="size-3.5" />
