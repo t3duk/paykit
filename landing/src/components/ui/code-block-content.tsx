@@ -1,7 +1,7 @@
 import { highlight } from "fumadocs-core/highlight";
 import type { HighlightOptions } from "fumadocs-core/highlight";
 import type { ComponentProps } from "react";
-import type { BundledTheme } from "shiki";
+import type { BundledLanguage, BundledTheme } from "shiki";
 
 import { CodeBlock, type CodeBlockProps, Pre } from "@/components/ui/code-block";
 import { cn } from "@/lib/utils";
@@ -38,27 +38,20 @@ function createPre(codeblock: CodeBlockProps, allowCopy: boolean) {
 }
 
 export async function InlineCode({ lang, code }: { lang: string; code: string }) {
-  const { codeToHtml } = await import("shiki");
-  const html = await codeToHtml(code, {
-    lang,
+  const { codeToTokens } = await import("shiki");
+  const { tokens } = await codeToTokens(code, {
+    lang: lang as BundledLanguage,
     theme: "one-dark-pro",
   });
 
-  // Extract just the inner spans from <pre><code><span class="line">...</span></code></pre>
-  const innerHtml = html
-    .replace(/<pre[^>]*>/, "")
-    .replace(/<\/pre>/, "")
-    .replace(/<code[^>]*>/, "")
-    .replace(/<\/code>/, "")
-    .replace(/<span class="line">/, "")
-    .replace(/<\/span>$/, "")
-    .replace(/background-color:[^;"]*;?/g, "");
-
   return (
-    <span
-      className="font-mono text-[11px] leading-none whitespace-nowrap"
-      dangerouslySetInnerHTML={{ __html: innerHtml }}
-    />
+    <span className="font-mono text-[11px] leading-none whitespace-nowrap">
+      {tokens[0]?.map((token, i) => (
+        <span key={i} style={{ color: token.color }}>
+          {token.content}
+        </span>
+      ))}
+    </span>
   );
 }
 

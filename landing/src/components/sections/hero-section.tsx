@@ -15,7 +15,7 @@ const codeBlockOverrides = {
 
 export function HeroSection() {
   return (
-    <Section label="01 Hero">
+    <Section>
       <SectionContent className="pt-24 lg:pt-36 pb-24 px-12">
         <div className="flex flex-col gap-10 lg:flex-row lg:items-center lg:justify-between">
           <div className="lg:max-w-lg">

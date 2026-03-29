@@ -50,7 +50,7 @@ export function HeroTitle() {
             nativeButton={false}
             size="lg"
             className="rounded-sm px-4 h-9.5"
-            variant={"default"}
+            variant="default"
           >
             Read Docs
           </Button>

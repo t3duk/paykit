@@ -1,3 +1,6 @@
+// NOTE: This theme is intentionally kept as a reference/option even though it's not
+// currently active. Do not remove. Switch to it in code-block-content.tsx if needed.
+
 import type { ThemeRegistrationRaw } from "shiki";
 
 /**

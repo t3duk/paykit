@@ -44,67 +44,6 @@ export const paykit = createPayKit({
 })
 `;
 
-// API section tabs
-export const codeExamples: Record<string, string> = {
-  Subscribe: `const { url } = await paykit.subscribe({
-  customerId: "user_123",
-  planId: "pro",
-})
-// url = Stripe Checkout URL (redirect customer here)
-
-// Upgrade — switches immediately
-await paykit.subscribe({
-  customerId: "user_123",
-  planId: "enterprise",
-})
-
-// Downgrade — switches at end of cycle
-await paykit.subscribe({
-  customerId: "user_123",
-  planId: "free",
-})`,
-  Check: `const { allowed, remaining } = await paykit.check({
-  customerId: "user_123",
-  featureId: "messages",
-})
-
-if (!allowed) {
-  return { error: "Message limit reached. Upgrade to Pro." }
-}`,
-  Report: `await paykit.report({
-  customerId: "user_123",
-  featureId: "messages",
-  amount: 1,
-})`,
-  Events: `const paykit = createPayKit({
-  // ...
-  on: {
-    "customer.updated": ({ customerId, plans }) => {
-      // plans = [{ id: "pro", status: "active", ... }]
-    },
-  },
-})`,
-};
-
-export const serverCode = `import { stripe } from "@paykitjs/stripe"
-import { createPayKit } from "paykitjs"
-import * as plans from "./paykit.plans"
-
-export const paykit = createPayKit({
-  database: env.DATABASE_URL,
-  provider: stripe({
-    secretKey: env.STRIPE_SECRET_KEY,
-    webhookSecret: env.STRIPE_WEBHOOK_SECRET,
-  }),
-  plans,
-})`;
-
-export const handlerCode = `// app/api/paykit/[...all]/route.ts
-import { paykit } from "@/server/paykit"
-import { paykitHandler } from "paykitjs/handlers/next"
-
-export const { GET, POST } = paykitHandler(paykit)`;
-
 // Demo section — inline snippets for flow log
 export const demoSnippets = {
   subscribe: `paykit.subscribe({ planId: "pro" })`,

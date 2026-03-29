@@ -12,7 +12,7 @@ const footerLinks = [{ label: "Author", href: URLs.authorX }];
 
 export function FooterSection() {
   return (
-    <Section label="07 Footer" last>
+    <Section last>
       <SectionContent>
         <div
           className="pointer-events-none absolute inset-0 select-none"
