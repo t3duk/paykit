@@ -26,7 +26,7 @@ export function DemoBackendPanel({
       )}
     >
       <div className="border-foreground/[0.08] flex h-10 shrink-0 items-center border-b border-dashed px-4">
-        <span className="text-foreground/30 font-mono text-[10px] uppercase tracking-wider">
+        <span className="text-foreground/30 font-mono text-xs uppercase tracking-wider">
           PAYKIT BACK-END
         </span>
       </div>
@@ -62,7 +62,7 @@ function FlowLog({
               transition={{ duration: 0.3, ease: "easeOut" }}
               className="border-foreground/[0.08] shrink-0 overflow-hidden rounded-md border"
             >
-              <div className="text-foreground/35 border-foreground/[0.06] flex items-center gap-2 border-b py-1.5 pr-1.5 pl-3 text-[11px] font-medium">
+              <div className="text-foreground/35 border-foreground/[0.06] flex items-center gap-2 border-b py-1.5 pr-1.5 pl-3 text-xs font-medium">
                 <User className="size-3 shrink-0" />
                 {card.trigger}
               </div>
@@ -89,7 +89,7 @@ function FlowLog({
                       ) : entry.type === "pending" ? (
                         <div className="flex items-center gap-2 py-0.5 pl-1.5">
                           <Loader2 className="text-foreground/20 size-3 shrink-0 animate-spin" />
-                          <span className="text-foreground/25 text-[11px]">{entry.label}</span>
+                          <span className="text-foreground/25 text-xs">{entry.label}</span>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2 py-0.5 pl-1.5">
@@ -112,7 +112,7 @@ function FlowLog({
                             animate={{ opacity: 1, x: 0 }}
                             transition={{ duration: 0.2, delay: 0.05 }}
                             className={cn(
-                              "text-[11px]",
+                              "text-xs",
                               entry.success === false
                                 ? "text-red-400/80"
                                 : entry.success === true

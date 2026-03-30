@@ -82,7 +82,7 @@ export function DemoAppWindow({
   return (
     <WindowChrome
       label={
-        <div className="bg-foreground/[0.04] text-foreground/30 flex-1 rounded-md px-3 py-1 text-center font-mono text-[10px]">
+        <div className="bg-foreground/[0.04] text-foreground/30 flex-1 rounded-md px-3 py-1 text-center font-mono text-[11px]">
           localhost:3000
         </div>
       }
@@ -94,7 +94,7 @@ export function DemoAppWindow({
           <div className="flex items-center gap-2">
             <span
               className={cn(
-                "rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wider transition-colors",
+                "rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider transition-colors",
                 plan === "pro"
                   ? "bg-emerald-500/10 text-emerald-500"
                   : "bg-foreground/[0.06] text-foreground/40",
@@ -103,12 +103,12 @@ export function DemoAppWindow({
               {plan === "pro" ? "Pro" : "Free"}
             </span>
             {plan === "pro" && (
-              <span className="text-foreground/25 text-[10px]">
+              <span className="text-foreground/25 text-[11px]">
                 {downgradeScheduled ? "Ends" : "Renews"} Apr 28, 2026
               </span>
             )}
           </div>
-          <span className="text-foreground/60 text-xs font-medium">AI Chat</span>
+          <span className="text-foreground/60 text-[13px] font-medium">AI Chat</span>
         </div>
 
         {/* Sidebar + chat */}
@@ -129,7 +129,7 @@ export function DemoAppWindow({
                   size="xs"
                   disabled={plan === "free" || downgradeScheduled || !!busy}
                   onClick={onDowngrade}
-                  className="mt-2 w-full text-[10px]"
+                  className="mt-2 w-full text-[11px]"
                 >
                   {busy === "downgrade" ? (
                     <>
@@ -163,7 +163,7 @@ export function DemoAppWindow({
                     else onUpgrade();
                   }}
                   className={cn(
-                    "mt-2 w-full text-[10px]",
+                    "mt-2 w-full text-[11px]",
                     blocked && plan === "free" && "animate-[glow-pulse_2s_ease-in-out_infinite]",
                   )}
                 >
@@ -189,7 +189,7 @@ export function DemoAppWindow({
             </div>
 
             <div className="mt-auto px-3 py-3">
-              <Button variant="outline" size="xs" onClick={onPortal} className="w-full text-[10px]">
+              <Button variant="outline" size="xs" onClick={onPortal} className="w-full text-[11px]">
                 Manage billing
               </Button>
             </div>
@@ -203,7 +203,7 @@ export function DemoAppWindow({
                 <div
                   key={i}
                   className={cn(
-                    "max-w-[80%] rounded-md px-3 py-2 text-xs leading-relaxed",
+                    "max-w-[80%] rounded-md px-3 py-2 text-[13px] leading-relaxed",
                     msg.role === "user"
                       ? "bg-foreground/[0.06] text-foreground/65 self-end"
                       : "bg-foreground/[0.03] text-foreground/50 self-start",
@@ -213,7 +213,7 @@ export function DemoAppWindow({
                 </div>
               ))}
               {aiState !== "idle" && (
-                <div className="bg-foreground/[0.03] text-foreground/50 max-w-[80%] self-start rounded-md px-3 py-2 text-xs leading-relaxed">
+                <div className="bg-foreground/[0.03] text-foreground/50 max-w-[80%] self-start rounded-md px-3 py-2 text-[13px] leading-relaxed">
                   {aiState === "thinking" ? (
                     <span className="inline-flex items-center gap-1">
                       <span className="bg-foreground/30 size-1 animate-bounce rounded-full [animation-delay:0ms]" />
@@ -236,7 +236,7 @@ export function DemoAppWindow({
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.3 }}
-                    className="mt-2 self-center rounded-md border border-red-500/15 bg-red-500/[0.04] px-4 py-2 text-center text-xs text-red-400"
+                    className="mt-2 self-center rounded-md border border-red-500/15 bg-red-500/[0.04] px-4 py-2 text-center text-[13px] text-red-400"
                   >
                     {plan === "free"
                       ? "Message limit reached. Upgrade to Pro."
@@ -250,7 +250,7 @@ export function DemoAppWindow({
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.4 }}
-                    className="mt-2 self-center rounded-md border border-emerald-500/15 bg-emerald-500/[0.04] px-4 py-2 text-center text-xs text-emerald-500"
+                    className="mt-2 self-center rounded-md border border-emerald-500/15 bg-emerald-500/[0.04] px-4 py-2 text-center text-[13px] text-emerald-500"
                   >
                     Upgraded to Pro! You can keep chatting.
                   </motion.div>
@@ -269,7 +269,7 @@ export function DemoAppWindow({
                 }}
                 disabled={blocked || aiState !== "idle"}
                 placeholder={blocked ? "Upgrade to continue..." : "Type a message..."}
-                className="text-foreground placeholder:text-foreground/25 min-w-0 flex-1 bg-transparent text-xs outline-none disabled:opacity-40"
+                className="text-foreground placeholder:text-foreground/25 min-w-0 flex-1 bg-transparent text-[13px] outline-none disabled:opacity-40"
               />
               <UsageRing used={used} limit={limit} />
               <button
@@ -315,10 +315,10 @@ function PlanCard({
       )}
     >
       <div className="flex items-baseline justify-between">
-        <span className="text-foreground/80 text-xs font-semibold">{name}</span>
-        <span className="text-foreground/40 text-[10px]">{price}</span>
+        <span className="text-foreground/80 text-[13px] font-semibold">{name}</span>
+        <span className="text-foreground/40 text-[11px]">{price}</span>
       </div>
-      <span className="text-foreground/30 mt-0.5 text-[10px]">{limit} msg/mo</span>
+      <span className="text-foreground/30 mt-0.5 text-[11px]">{limit} msg/mo</span>
       {children}
     </div>
   );
@@ -353,7 +353,7 @@ function UsageRing({ used, limit }: { used: number; limit: number }) {
           }}
         />
       </svg>
-      <span className="text-foreground/25 font-mono text-[10px]">
+      <span className="text-foreground/25 font-mono text-[11px]">
         {remaining}/{limit}
       </span>
     </div>
