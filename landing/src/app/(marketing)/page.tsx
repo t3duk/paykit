@@ -1,3 +1,4 @@
+import { CTASection } from "@/components/sections/cta-section";
 import { DemoSection } from "@/components/sections/demo";
 import { FeaturesSection } from "@/components/sections/features-section";
 import { FooterSection } from "@/components/sections/footer-section";
@@ -29,6 +30,7 @@ export default function HomePage() {
           }}
         />
         <FeaturesSection />
+        <CTASection />
         <FooterSection />
       </div>
     </>
