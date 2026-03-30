@@ -185,7 +185,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               <LogoLockup className="h-4.5" />
               {VERSION_TEXT && (
                 <Badge
-                  className="text-muted-foreground mb-0.5 ml-3 rounded-xs px-1"
+                  className="text-muted-foreground mb-0.5 ml-3 rounded-md px-1"
                   variant={"outline"}
                 >
                   {VERSION_TEXT}
