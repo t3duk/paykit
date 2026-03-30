@@ -50,6 +50,7 @@ export function DemoAppWindow({
   aiState,
   streamingText,
   upgradeBanner,
+  autoTyping,
   chatRef,
   className,
   onInputChange,
@@ -70,6 +71,7 @@ export function DemoAppWindow({
   aiState: "idle" | "thinking" | "streaming";
   streamingText: string;
   upgradeBanner: boolean;
+  autoTyping: boolean;
   chatRef: RefObject<HTMLDivElement | null>;
   className?: string;
   onInputChange: (value: string) => void;
@@ -164,7 +166,7 @@ export function DemoAppWindow({
                   }}
                   className={cn(
                     "mt-2 w-full text-[11px]",
-                    blocked && plan === "free" && "animate-[glow-pulse_2s_ease-in-out_infinite]",
+                    blocked && plan === "free" && "animate-[shake_0.4s_ease-in-out]",
                   )}
                 >
                   {busy === "upgrade" ? (
@@ -260,17 +262,24 @@ export function DemoAppWindow({
 
             {/* Input */}
             <div className="border-foreground/[0.06] flex shrink-0 items-center gap-2.5 border-t px-4 py-3">
-              <input
-                type="text"
-                value={input}
-                onChange={(e) => onInputChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") onSend();
-                }}
-                disabled={blocked || aiState !== "idle"}
-                placeholder={blocked ? "Upgrade to continue..." : "Type a message..."}
-                className="text-foreground placeholder:text-foreground/25 min-w-0 flex-1 bg-transparent text-[13px] outline-none disabled:opacity-40"
-              />
+              {autoTyping ? (
+                <div className="text-foreground min-w-0 flex-1 text-[13px]">
+                  {input}
+                  <span className="bg-foreground/60 ml-px inline-block h-3.5 w-px animate-pulse" />
+                </div>
+              ) : (
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => onInputChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") onSend();
+                  }}
+                  disabled={blocked || aiState !== "idle"}
+                  placeholder={blocked ? "Upgrade to continue..." : "Type a message..."}
+                  className="text-foreground placeholder:text-foreground/25 min-w-0 flex-1 bg-transparent text-[13px] outline-none disabled:opacity-40"
+                />
+              )}
               <UsageRing used={used} limit={limit} />
               <button
                 type="button"
@@ -306,7 +315,7 @@ function PlanCard({
   return (
     <div
       className={cn(
-        "flex flex-col rounded-md border p-3 transition-all",
+        "flex flex-col rounded-md border p-2 transition-all",
         active
           ? variant === "pro"
             ? "border-emerald-500/20 bg-emerald-500/[0.03]"

@@ -24,13 +24,22 @@
   }
 }
 
-@keyframes glow-pulse {
+@keyframes shake {
   0%,
   100% {
-    box-shadow: 0 0 6px 2px color-mix(in srgb, var(--color-primary, currentColor) 5%, transparent);
+    transform: translateX(0);
   }
-  50% {
-    box-shadow: 0 0 8px 3px color-mix(in srgb, var(--color-primary, currentColor) 18%, transparent);
+  20% {
+    transform: translateX(-3px);
+  }
+  40% {
+    transform: translateX(3px);
+  }
+  60% {
+    transform: translateX(-2px);
+  }
+  80% {
+    transform: translateX(2px);
   }
 }
 

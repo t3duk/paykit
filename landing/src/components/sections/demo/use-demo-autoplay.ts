@@ -7,6 +7,7 @@ import { interactiveReplies, scriptedReplies } from "./demo-types";
 export function useDemoAutoPlay({
   sectionRef,
   setInput,
+  setAutoTyping,
   setMessages,
   setUsed,
   addCard,
@@ -17,6 +18,7 @@ export function useDemoAutoPlay({
 }: {
   sectionRef: RefObject<HTMLDivElement | null>;
   setInput: (v: string) => void;
+  setAutoTyping: (v: boolean) => void;
   setMessages: React.Dispatch<React.SetStateAction<{ role: "user" | "ai"; text: string }[]>>;
   setUsed: React.Dispatch<React.SetStateAction<number>>;
   addCard: (trigger: string) => string;
@@ -30,17 +32,19 @@ export function useDemoAutoPlay({
   const typeText = useCallback(
     (text: string) =>
       new Promise<void>((resolve) => {
+        setAutoTyping(true);
         let i = 0;
         const interval = setInterval(() => {
           i++;
           setInput(text.slice(0, i));
           if (i >= text.length) {
             clearInterval(interval);
+            setAutoTyping(false);
             resolve();
           }
-        }, 40);
+        }, 25);
       }),
-    [setInput],
+    [setInput, setAutoTyping],
   );
 
   const wait = useCallback(
@@ -106,20 +110,20 @@ export function useDemoAutoPlay({
   );
 
   const runAutoPlay = useCallback(async () => {
-    await wait(1000);
+    await wait(600);
 
     await typeText("How does billing work?");
-    await wait(300);
+    await wait(200);
     await scriptSend("How does billing work?");
-    await wait(1500);
+    await wait(800);
 
     await typeText("Can I add usage limits?");
-    await wait(300);
+    await wait(200);
     await scriptSend("Can I add usage limits?");
-    await wait(1500);
+    await wait(800);
 
     await typeText("What happens when I hit the limit?");
-    await wait(300);
+    await wait(200);
     await scriptSend("What happens when I hit the limit?");
   }, [typeText, scriptSend, wait]);
 

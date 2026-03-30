@@ -25,6 +25,7 @@ export function DemoSection({ snippets }: { snippets: Record<SnippetKey, ReactNo
   const [streamingText, setStreamingText] = useState("");
   const [cards, setCards] = useState<FlowCard[]>([]);
   const [upgradeBanner, setUpgradeBanner] = useState(false);
+  const [autoTyping, setAutoTyping] = useState(false);
   const chatRef = useRef<HTMLDivElement>(null);
   const sectionRef = useRef<HTMLDivElement>(null);
   const usedRef = useRef(INITIAL_USED);
@@ -192,7 +193,7 @@ export function DemoSection({ snippets }: { snippets: Record<SnippetKey, ReactNo
     if (!downgradeScheduled || busy) return;
     setBusy("resubscribe");
 
-    const cId = addCard("Clicked Re-subscribe");
+    const cId = addCard("Clicked Resubscribe");
     addEntry(cId, { type: "code", snippet: "resubscribe" });
 
     await addEntryDelayed(
@@ -280,6 +281,7 @@ export function DemoSection({ snippets }: { snippets: Record<SnippetKey, ReactNo
   useDemoAutoPlay({
     sectionRef,
     setInput,
+    setAutoTyping,
     setMessages,
     setUsed,
     addCard,
@@ -321,6 +323,7 @@ export function DemoSection({ snippets }: { snippets: Record<SnippetKey, ReactNo
               aiState={aiState}
               streamingText={streamingText}
               upgradeBanner={upgradeBanner}
+              autoTyping={autoTyping}
               chatRef={chatRef}
               className={WINDOW_HEIGHT}
               onInputChange={setInput}
