@@ -12,7 +12,7 @@ import type { FlowCard, FlowEntry, SnippetKey } from "./demo-types";
 import { FREE_LIMIT, INITIAL_USED, PRO_LIMIT, interactiveReplies, nextCardId } from "./demo-types";
 import { useDemoAutoPlay } from "./use-demo-autoplay";
 
-const WINDOW_HEIGHT = "h-144";
+const WINDOW_HEIGHT = "h-80 md:h-144";
 
 export function DemoSection({ snippets }: { snippets: Record<SnippetKey, ReactNode> }) {
   const [plan, setPlan] = useState<"free" | "pro">("free");
@@ -308,9 +308,9 @@ export function DemoSection({ snippets }: { snippets: Record<SnippetKey, ReactNo
 
         <div
           ref={sectionRef}
-          className="mt-12 flex flex-col gap-4 lg:flex-row lg:items-stretch lg:gap-4"
+          className="mt-6 flex flex-col-reverse gap-2 md:flex-row md:items-stretch md:gap-4 lg:mt-12"
         >
-          <div className="border-foreground/[0.08] rounded-[10px] border p-[4px] lg:w-[73%]">
+          <div className="border-foreground/[0.08] rounded-[10px] border p-[4px] md:w-1/2 lg:w-[73%]">
             <DemoAppWindow
               plan={plan}
               downgradeScheduled={downgradeScheduled}
@@ -335,8 +335,8 @@ export function DemoSection({ snippets }: { snippets: Record<SnippetKey, ReactNo
             />
           </div>
 
-          <div className="border-foreground/[0.08] rounded-[10px] border p-[4px] lg:w-[37%]">
-            <DemoBackendPanel cards={cards} snippets={snippets} className={WINDOW_HEIGHT} />
+          <div className="border-foreground/[0.08] rounded-[10px] border p-[4px] md:w-1/2 lg:w-[37%]">
+            <DemoBackendPanel cards={cards} snippets={snippets} className="h-58 md:h-144" />
           </div>
         </div>
       </SectionContent>

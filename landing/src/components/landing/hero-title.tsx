@@ -22,10 +22,10 @@ export function HeroTitle() {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: "easeOut" }}
-      className="relative flex w-full flex-col items-start"
+      className="relative flex w-full flex-col items-center text-center lg:items-start lg:text-left"
     >
       <div className="space-y-2.5 sm:space-y-4">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center justify-center gap-1.5 lg:justify-start">
           <Sparkle
             className="size-[0.9em] text-neutral-600 dark:text-neutral-100"
             aria-hidden="true"
@@ -34,17 +34,17 @@ export function HeroTitle() {
             Own your payments
           </span>
         </div>
-        <h1 className="max-w-4xl text-xl leading-tight tracking-tight text-neutral-800 sm:text-2xl md:text-3xl lg:text-[2.5rem] dark:text-neutral-200">
-          The first billing framework <br className="hidden lg:block" />
+        <h1 className="max-w-4xl text-3xl leading-tight tracking-tight text-neutral-800 sm:text-3xl md:text-3xl lg:text-[2.5rem] dark:text-neutral-200">
+          The first billing framework <br />
           for <span className="border-foreground/20 border-b border-dashed">TypeScript</span>
         </h1>
 
-        <p className="text-foreground/50 max-w-md text-sm leading-relaxed sm:text-base">
+        <p className="text-foreground/50 max-w-md text-[13px] leading-relaxed sm:text-base">
           Define plans and features in code. PayKit handles Stripe, webhooks, and usage state - runs
           inside your app.
         </p>
 
-        <div className="mt-12 flex flex-wrap items-center gap-3 sm:gap-4">
+        <div className="mt-6 flex flex-wrap items-center justify-center gap-3 sm:mt-8 sm:gap-4 lg:mt-12 lg:justify-start">
           <Button
             render={<Link href="/docs" />}
             nativeButton={false}

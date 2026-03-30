@@ -63,7 +63,7 @@ export function SectionContent({
   children: ReactNode;
   className?: string;
 }) {
-  return <div className={cn("p-12", className)}>{children}</div>;
+  return <div className={cn("px-5 py-8 sm:px-8 sm:py-10 lg:p-12", className)}>{children}</div>;
 }
 
 // ─── SectionSeparator (full section-width dashed line) ───────────────

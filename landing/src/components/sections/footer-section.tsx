@@ -17,8 +17,12 @@ export function FooterSection() {
   return (
     <Section last>
       <SectionContent>
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-          <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">
+        <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
+          <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1.5 sm:justify-start">
+            <span className="text-foreground/45 dark:text-foreground/30 font-mono text-xs">
+              © {new Date().getFullYear()} PayKit
+            </span>
+            <span className="text-foreground/15 mx-2 text-xs select-none">/</span>
             {navLinks.map((link, i) => (
               <span key={link.label} className="flex items-center">
                 <Link
@@ -36,7 +40,7 @@ export function FooterSection() {
             ))}
           </div>
 
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-3">
             <Link
               href={URLs.discord}
               target="_blank"
@@ -73,10 +77,6 @@ export function FooterSection() {
             >
               <Github className="size-4" />
             </Link>
-            <span className="text-foreground/10 select-none">·</span>
-            <span className="text-foreground/45 dark:text-foreground/30 font-mono text-xs">
-              © {new Date().getFullYear()} PayKit
-            </span>
           </div>
         </div>
       </SectionContent>

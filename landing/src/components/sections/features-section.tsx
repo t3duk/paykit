@@ -39,7 +39,7 @@ export function FeaturesSection() {
   return (
     <Section>
       <SectionContent>
-        <div className="mb-10 max-w-lg space-y-2">
+        <div className="mb-6 max-w-lg space-y-2 lg:mb-10">
           <h2 className="text-foreground/90 text-xl font-semibold tracking-tight sm:text-2xl">
             Features
           </h2>

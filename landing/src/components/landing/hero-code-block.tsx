@@ -77,7 +77,7 @@ export function HeroCodeBlock({
   }, []);
 
   return (
-    <div className="border-border flex-1 rounded-[10px] border p-[4px] lg:max-w-[37rem]">
+    <div className="border-border w-full max-w-[37rem] shrink rounded-[10px] border p-[4px] lg:flex-1">
       <div className="border-foreground/[0.1] bg-card flex flex-col overflow-hidden rounded-[6px] border">
         {/* Tab bar */}
         <div className="border-foreground/[0.08] flex items-center border-b">
@@ -122,7 +122,7 @@ export function HeroCodeBlock({
         </div>
 
         {/* Content — fixed height */}
-        <div className="relative h-[27.5rem] overflow-y-auto">
+        <div className="relative h-[22rem] lg:h-[27.5rem]">
           {/* Push / back button */}
           <div className="absolute right-2.5 bottom-2.5 z-10">
             <Button
@@ -140,6 +140,7 @@ export function HeroCodeBlock({
               {view === "code" ? "Terminal" : "Back to code"}
             </Button>
           </div>
+          <div className="h-full overflow-y-auto">
           {view === "code" ? (
             <>
               <div className={activeTab === "plans" ? "block" : "hidden"}>{plansCodeBlock}</div>
@@ -183,6 +184,7 @@ export function HeroCodeBlock({
               )}
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

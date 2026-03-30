@@ -90,7 +90,7 @@ export function DemoAppWindow({
       }
       className={className}
     >
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {/* Top bar */}
         <div className="border-foreground/[0.06] flex shrink-0 items-center justify-between border-b px-4 py-2.5">
           <div className="flex items-center gap-2">
@@ -113,12 +113,11 @@ export function DemoAppWindow({
           <span className="text-foreground/60 text-[13px] font-medium">AI Chat</span>
         </div>
 
-        {/* Sidebar + chat */}
-        <div className="flex min-h-0 flex-1">
-          {/* Sidebar */}
-          <div className="border-foreground/[0.06] flex w-50 shrink-0 flex-col border-r">
-            <div className="flex flex-col gap-2 px-3 py-3">
-              {/* Free card */}
+        {/* Billing + chat */}
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+          {/* Billing panel — hidden on mobile, sidebar on desktop */}
+          <div className="border-foreground/[0.06] hidden shrink-0 flex-col lg:flex lg:w-50 lg:border-r">
+            <div className="flex gap-2 px-3 py-3 lg:flex-col">
               <PlanCard
                 name="Free"
                 price="$0"
@@ -148,7 +147,6 @@ export function DemoAppWindow({
                 </Button>
               </PlanCard>
 
-              {/* Pro card */}
               <PlanCard
                 name="Pro"
                 price="$19/mo"
@@ -190,7 +188,7 @@ export function DemoAppWindow({
               </PlanCard>
             </div>
 
-            <div className="mt-auto px-3 py-3">
+            <div className="hidden px-3 pb-3 lg:block lg:mt-auto lg:pt-3">
               <Button variant="outline" size="xs" onClick={onPortal} className="w-full text-[11px]">
                 Manage billing
               </Button>
@@ -198,8 +196,8 @@ export function DemoAppWindow({
           </div>
 
           {/* Chat */}
-          <div className="flex min-w-0 flex-1 flex-col">
-            <div ref={chatRef} className="flex flex-1 flex-col gap-2 overflow-y-auto p-4">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div ref={chatRef} className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-4">
               <div className="mt-auto" />
               {messages.map((msg, i) => (
                 <div
@@ -315,7 +313,7 @@ function PlanCard({
   return (
     <div
       className={cn(
-        "flex flex-col rounded-md border p-2 transition-all",
+        "flex flex-1 flex-col rounded-md border p-2 transition-all",
         active
           ? variant === "pro"
             ? "border-emerald-500/20 bg-emerald-500/[0.03]"
