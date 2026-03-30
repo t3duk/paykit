@@ -310,7 +310,7 @@ export function DemoSection({ snippets }: { snippets: Record<SnippetKey, ReactNo
           ref={sectionRef}
           className="mt-12 flex flex-col gap-4 lg:flex-row lg:items-stretch lg:gap-4"
         >
-          <div className="border-foreground/[0.08] rounded-xl border p-1 lg:w-[73%]">
+          <div className="border-foreground/[0.08] rounded-[10px] border p-[4px] lg:w-[73%]">
             <DemoAppWindow
               plan={plan}
               downgradeScheduled={downgradeScheduled}
@@ -335,7 +335,7 @@ export function DemoSection({ snippets }: { snippets: Record<SnippetKey, ReactNo
             />
           </div>
 
-          <div className="border-foreground/[0.08] rounded-xl border p-1 lg:w-[37%]">
+          <div className="border-foreground/[0.08] rounded-[10px] border p-[4px] lg:w-[37%]">
             <DemoBackendPanel cards={cards} snippets={snippets} className={WINDOW_HEIGHT} />
           </div>
         </div>

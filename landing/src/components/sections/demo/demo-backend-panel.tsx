@@ -27,7 +27,7 @@ export function DemoBackendPanel({
     >
       <div className="border-foreground/[0.08] flex h-10 shrink-0 items-center border-b border-dashed px-4">
         <span className="text-foreground/45 font-mono text-xs uppercase tracking-wider">
-          PAYKIT BACK-END
+          Backend
         </span>
       </div>
       <div className="min-h-0 flex-1">

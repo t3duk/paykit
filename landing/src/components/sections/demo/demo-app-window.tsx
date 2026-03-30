@@ -25,7 +25,7 @@ function WindowChrome({
         className,
       )}
     >
-      <div className="border-foreground/[0.06] flex h-10 shrink-0 items-center gap-3 border-b px-4">
+      <div className="border-foreground/[0.06] flex h-9.5 shrink-0 items-center gap-3 border-b px-4">
         <div className="flex items-center gap-1.5">
           <div className="size-2.5 rounded-full bg-red-400/40" />
           <div className="size-2.5 rounded-full bg-yellow-400/40" />
@@ -84,7 +84,7 @@ export function DemoAppWindow({
   return (
     <WindowChrome
       label={
-        <div className="bg-foreground/[0.04] text-foreground/45 flex-1 rounded-md px-3 py-1 text-center font-mono text-[11px]">
+        <div className="bg-foreground/[0.04] text-foreground/45 flex-1 rounded-md px-3 py-[0.2rem] text-center font-mono text-[11px]">
           localhost:3000
         </div>
       }
