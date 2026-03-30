@@ -311,7 +311,8 @@ export async function beginWebhookEvent(
       throw error;
     }
 
-    // Allow retry of previously failed events by resetting to "processing"
+    // Allow retry of previously failed events, or events stuck in "processing"
+    // for over 5 minutes (process crash before finishWebhookEvent was called).
     const retried = await database
       .update(webhookEvent)
       .set({ error: null, processedAt: null, status: "processing" })
@@ -319,7 +320,7 @@ export async function beginWebhookEvent(
         and(
           eq(webhookEvent.providerId, input.providerId),
           eq(webhookEvent.providerEventId, input.providerEventId),
-          eq(webhookEvent.status, "failed"),
+          sql`(${webhookEvent.status} = 'failed' OR (${webhookEvent.status} = 'processing' AND ${webhookEvent.receivedAt} < now() - interval '5 minutes'))`,
         ),
       )
       .returning({ id: webhookEvent.id });
@@ -372,8 +373,7 @@ export async function upsertSubscriptionRecord(
     endedAt: input.subscription.endedAt ?? null,
     providerId: input.providerId,
     providerSubscriptionId: input.subscription.providerSubscriptionId,
-    providerSubscriptionScheduleId:
-      input.subscription.providerSubscriptionScheduleId ?? null,
+    providerSubscriptionScheduleId: input.subscription.providerSubscriptionScheduleId ?? null,
     status: input.subscription.status,
     updatedAt: now,
   };
