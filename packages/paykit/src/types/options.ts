@@ -2,6 +2,7 @@ import type { Pool } from "pg";
 
 import type { StripeProviderConfig } from "../providers/provider";
 import type { PayKitEventHandlers } from "./events";
+import type { PayKitPlugin } from "./plugin";
 import type { PayKitPlansModule } from "./schema";
 
 export interface PayKitLogger {
@@ -12,7 +13,7 @@ export interface PayKitLogger {
 }
 
 export interface PayKitOptions {
-  database: Pool;
+  database: Pool | string;
   provider: StripeProviderConfig;
   plans?: PayKitPlansModule;
   basePath?: string;
@@ -24,5 +25,6 @@ export interface PayKitOptions {
     }>;
   };
   on?: PayKitEventHandlers;
+  plugins?: PayKitPlugin[];
   logger?: PayKitLogger;
 }

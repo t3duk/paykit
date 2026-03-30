@@ -1,3 +1,5 @@
+import pg from "pg";
+
 import { createDatabase, type PayKitDatabase } from "../database/index";
 import type { StripeProviderConfig, StripeRuntime } from "../providers/provider";
 import { createStripeRuntime } from "../providers/stripe";
@@ -25,7 +27,11 @@ export async function createContext(options: PayKitOptions): Promise<PayKitConte
     throw new Error("A provider is required");
   }
 
-  const database = await createDatabase(options.database);
+  const pool =
+    typeof options.database === "string"
+      ? new pg.Pool({ connectionString: options.database })
+      : options.database;
+  const database = await createDatabase(pool);
   const stripe = options.provider.runtime ?? createStripeRuntime(options.provider);
 
   return {
