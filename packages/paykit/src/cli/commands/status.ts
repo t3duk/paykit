@@ -15,6 +15,7 @@ import {
   getStripeAccountInfo,
 } from "../utils/format";
 import { getPayKitConfig } from "../utils/get-config";
+import { capture } from "../utils/telemetry";
 
 async function statusAction(options: { config?: string; cwd: string }): Promise<void> {
   const cwd = path.resolve(options.cwd);
@@ -121,6 +122,11 @@ async function statusAction(options: { config?: string; cwd: string }): Promise<
       p.log.info(`Products\n  ${header}\n${planLines.join("\n")}`);
     }
   }
+
+  capture("cli_command", {
+    command: "status",
+    needsMigration: pendingMigrations > 0,
+  });
 
   // Final
   if (pendingMigrations > 0) {

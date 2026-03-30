@@ -14,6 +14,7 @@ import {
   getStripeAccountInfo,
 } from "../utils/format";
 import { getPayKitConfig } from "../utils/get-config";
+import { capture } from "../utils/telemetry";
 
 async function pushAction(options: { config?: string; cwd: string; yes?: boolean }): Promise<void> {
   const cwd = path.resolve(options.cwd);
@@ -79,7 +80,16 @@ async function pushAction(options: { config?: string; cwd: string; yes?: boolean
       p.log.success("Plans synced");
     }
 
-    p.outro(`Done ${picocolors.dim("·")} ${String(results.length)} plan${results.length === 1 ? "" : "s"} synced`);
+    capture("cli_command", {
+      command: "push",
+      migrated: pendingMigrations > 0,
+      planCount: results.length,
+      plansSynced: syncedCount,
+    });
+
+    p.outro(
+      `Done ${picocolors.dim("·")} ${String(results.length)} plan${results.length === 1 ? "" : "s"} synced`,
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     p.log.error(message);

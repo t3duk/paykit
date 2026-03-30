@@ -1,6 +1,6 @@
 "use client";
 
-import { redirect, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 
@@ -12,7 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth-client";
 
 export function CheckoutPageContent() {
-  const { data: session, error, isPending } = authClient.useSession();
+  const { data: session, isPending } = authClient.useSession();
   const searchParams = useSearchParams();
   const toastShown = useRef(false);
 

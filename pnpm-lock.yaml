@@ -178,6 +178,55 @@ importers:
         specifier: ^5.8.2
         version: 5.9.2
 
+  apps/test-init-app:
+    dependencies:
+      '@paykitjs/stripe':
+        specifier: workspace:*
+        version: link:../../packages/stripe
+      '@t3-oss/env-nextjs':
+        specifier: ^0.12.0
+        version: 0.12.0(typescript@5.9.2)(valibot@1.2.0(typescript@5.9.2))(zod@3.25.76)
+      next:
+        specifier: ^15.2.3
+        version: 15.5.12(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      paykitjs:
+        specifier: workspace:*
+        version: link:../../packages/paykit
+      react:
+        specifier: ^19.0.0
+        version: 19.2.4
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.4(react@19.2.4)
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
+    devDependencies:
+      '@biomejs/biome':
+        specifier: ^2.2.5
+        version: 2.4.6
+      '@tailwindcss/postcss':
+        specifier: ^4.0.15
+        version: 4.2.1
+      '@types/node':
+        specifier: ^20.14.10
+        version: 20.19.34
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.14)
+      postcss:
+        specifier: ^8.5.3
+        version: 8.5.6
+      tailwindcss:
+        specifier: ^4.0.15
+        version: 4.2.1
+      typescript:
+        specifier: ^5.8.2
+        version: 5.9.2
+
   landing:
     dependencies:
       '@base-ui/react':
@@ -340,6 +389,9 @@ importers:
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1
+      posthog-node:
+        specifier: ^5.28.8
+        version: 5.28.8
       stripe:
         specifier: ^19.1.0
         version: 19.3.1(@types/node@25.3.0)
@@ -1923,6 +1975,9 @@ packages:
 
   '@petamoriken/float16@3.9.3':
     resolution: {integrity: sha512-8awtpHXCx/bNpFt4mt2xdkgtgVvKqty8VbjHI/WWWQuEw+KLzFot3f4+LkQY9YmOtq7A5GdOnqoIC8Pdygjk2g==}
+
+  '@posthog/core@1.24.3':
+    resolution: {integrity: sha512-nTyL1R/8V5vfdH37MbjXDYWFnUoxVijb2TnfJSNHz0+RBLtNnq0hNnBDCwWLl5yh1bzeJBYTT8UF+dV7D8y03w==}
 
   '@prisma/client-runtime-utils@7.4.2':
     resolution: {integrity: sha512-cID+rzOEb38VyMsx5LwJMEY4NGIrWCNpKu/0ImbeooQ2Px7TI+kOt7cm0NelxUzF2V41UVVXAmYjANZQtCu1/Q==}
@@ -5608,6 +5663,15 @@ packages:
     resolution: {integrity: sha512-d+JFcLM17njZaOLkv6SCev7uoLaBtfK86vMUXhW1Z4glPWh4jozno9APvW/XKFJ3CCxVoC7OL38BqRydtu5nGg==}
     engines: {node: '>=12'}
 
+  posthog-node@5.28.8:
+    resolution: {integrity: sha512-UD55SdSbgUvoOb3HkvNC22ZgpdeNknDrao8+yYTB/rDnwgaibPB7pJJzgn4j7MIUw7DOTEHEmJRqza1EDtK2Zw==}
+    engines: {node: ^20.20.0 || >=22.22.0}
+    peerDependencies:
+      rxjs: ^7.0.0
+    peerDependenciesMeta:
+      rxjs:
+        optional: true
+
   powershell-utils@0.1.0:
     resolution: {integrity: sha512-dM0jVuXJPsDN6DvRpea484tCUaMiXWjuCn++HGTqUWzGDjv5tZkEZldAJ/UMlqRYGFrD/etByo4/xOuC/snX2A==}
     engines: {node: '>=20'}
@@ -7972,6 +8036,10 @@ snapshots:
 
   '@petamoriken/float16@3.9.3':
     optional: true
+
+  '@posthog/core@1.24.3':
+    dependencies:
+      cross-spawn: 7.0.6
 
   '@prisma/client-runtime-utils@7.4.2':
     optional: true
@@ -11939,6 +12007,10 @@ snapshots:
 
   postgres@3.4.8:
     optional: true
+
+  posthog-node@5.28.8:
+    dependencies:
+      '@posthog/core': 1.24.3
 
   powershell-utils@0.1.0: {}
 

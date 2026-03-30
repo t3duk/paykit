@@ -14,6 +14,7 @@ import {
   isPackageInstalled,
   resolveImportPath,
 } from "../utils/detect";
+import { capture } from "../utils/telemetry";
 
 function ensureDir(filePath: string): void {
   const dir = path.dirname(filePath);
@@ -315,6 +316,14 @@ async function initAction(options: { cwd: string }): Promise<void> {
       "Manual Setup",
     );
   }
+
+  capture("cli_command", {
+    command: "init",
+    provider: provider as string,
+    framework: framework as string,
+    template: templateId as string,
+    filesCreated: files.length,
+  });
 
   // Done
   p.note(
