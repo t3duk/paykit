@@ -142,10 +142,13 @@ export interface NormalizedSchema {
   plans: readonly NormalizedPlan[];
 }
 
-export type PayKitPlansModule = Record<string, unknown>;
+export type PayKitPlansModule = readonly PayKitPlan[] | Record<string, unknown>;
 
-export type PlanIdFromPlans<TPlans> =
-  TPlans extends Record<PropertyKey, unknown>
+export type PlanIdFromPlans<TPlans> = TPlans extends readonly (infer TItem)[]
+  ? TItem extends PayKitPlan<PayKitPlanConfig<infer TId>>
+    ? TId
+    : never
+  : TPlans extends Record<PropertyKey, unknown>
     ? TPlans[keyof TPlans] extends infer TValue
       ? TValue extends { id: infer TId extends string }
         ? TValue extends PayKitPlan
@@ -319,7 +322,9 @@ export function normalizeSchema(plans: PayKitPlansModule | undefined): Normalize
     };
   }
 
-  const exportedPlans = Object.values(plans).filter(isPayKitPlan);
+  const exportedPlans = Array.isArray(plans)
+    ? plans.filter(isPayKitPlan)
+    : Object.values(plans).filter(isPayKitPlan);
   const features = new Map<string, NormalizedFeature>();
   const defaultPlansByGroup = new Map<string, string>();
   const plansById = new Map<string, NormalizedPlan>();
