@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Loader2, RotateCcw, Terminal } from "lucide-react";
+import { ChevronLeft, Loader2, Terminal } from "lucide-react";
 import type { ReactNode } from "react";
 import { useCallback, useState } from "react";
 
@@ -10,22 +10,93 @@ import { cn } from "@/lib/utils";
 
 type View = "code" | "terminal";
 
-const pushSteps = [
-  { text: "$ npx paykitjs push", type: "command" as const },
-  { text: "", type: "pause" as const },
-  { text: "", type: "blank" as const },
-  { text: "Syncing plans to Stripe...", type: "info" as const },
-  { text: "✓ Plan 'free' synced", type: "success" as const },
-  { text: "✓ Plan 'pro' synced", type: "success" as const },
-  { text: "", type: "blank" as const },
-  { text: "Syncing features...", type: "info" as const },
-  { text: "✓ Feature 'messages' (metered)", type: "success" as const },
-  { text: "✓ Feature 'pro_models' (boolean)", type: "success" as const },
-  { text: "", type: "blank" as const },
-  { text: "Applying database migrations...", type: "info" as const },
-  { text: "✓ 5 tables created (paykit_*)", type: "success" as const },
-  { text: "", type: "blank" as const },
-  { text: "Done.", type: "done" as const },
+type Segment = { text: string; color?: string };
+type PushStep = { segments: Segment[]; type: string; delay?: number };
+
+const bar = "text-white/15";
+const normal = "text-white/85";
+const green = "text-emerald-400";
+const purple = "text-violet-400";
+
+const pushSteps: PushStep[] = [
+  {
+    segments: [
+      { text: "❯ ", color: normal },
+      { text: "npx paykitjs push", color: normal },
+    ],
+    type: "line",
+  },
+  { segments: [], type: "pause" },
+  { segments: [{ text: "│", color: bar }], type: "line" },
+  {
+    segments: [
+      { text: "●", color: purple },
+      { text: " Connected", color: normal },
+    ],
+    type: "line",
+  },
+  {
+    segments: [
+      { text: "│", color: bar },
+      { text: "  Database · postgresql://localhost:5432/paykit", color: normal },
+    ],
+    type: "line",
+  },
+  {
+    segments: [
+      { text: "│", color: bar },
+      { text: "  Stripe   · PayKit (sandbox)", color: normal },
+    ],
+    type: "line",
+  },
+  { segments: [{ text: "│", color: bar }], type: "line" },
+  {
+    segments: [
+      { text: "◆", color: green },
+      { text: " Schema is up to date", color: normal },
+    ],
+    type: "line",
+  },
+  { segments: [{ text: "│", color: bar }], type: "line" },
+  {
+    segments: [
+      { text: "◇", color: green },
+      { text: " Plan changes", color: normal },
+    ],
+    type: "line",
+  },
+  {
+    segments: [
+      { text: "│", color: bar },
+      { text: "  + free ($0)    ", color: green },
+      { text: "new", color: normal },
+    ],
+    type: "line",
+  },
+  {
+    segments: [
+      { text: "│", color: bar },
+      { text: "  + pro ($19/mo) ", color: green },
+      { text: "new", color: normal },
+    ],
+    type: "line",
+  },
+  { segments: [{ text: "│", color: bar }], type: "line" },
+  {
+    segments: [
+      { text: "◆", color: green },
+      { text: " Plans synced", color: normal },
+    ],
+    type: "line",
+  },
+  { segments: [{ text: "│", color: bar }], type: "line" },
+  {
+    segments: [
+      { text: "●", color: green },
+      { text: " Done · 2 plans synced", color: normal },
+    ],
+    type: "line",
+  },
 ];
 
 export function HeroCodeBlock({
@@ -47,16 +118,7 @@ export function HeroCodeBlock({
     setTerminalLines([]);
 
     for (const step of pushSteps) {
-      const delay =
-        step.type === "command"
-          ? 200
-          : step.type === "pause"
-            ? 800
-            : step.type === "blank"
-              ? 100
-              : step.type === "done"
-                ? 300
-                : 250;
+      const delay = step.type === "pause" ? 800 : (step.delay ?? 150);
 
       await new Promise<void>((resolve) => {
         setTimeout(() => {
@@ -135,55 +197,41 @@ export function HeroCodeBlock({
               {view === "code" ? (
                 <Terminal className="size-3.5" />
               ) : (
-                <RotateCcw className="size-3.5" />
+                <ChevronLeft className="size-3.5 -ml-1" />
               )}
               {view === "code" ? "Terminal" : "Back to code"}
             </Button>
           </div>
           <div className="h-full overflow-y-auto">
-          {view === "code" ? (
-            <>
-              <div className={activeTab === "plans" ? "block" : "hidden"}>{plansCodeBlock}</div>
-              <div className={activeTab === "config" ? "block" : "hidden"}>{configCodeBlock}</div>
-            </>
-          ) : (
-            <div className="h-full bg-[#0a0a0a] p-4 font-mono text-[12px] leading-relaxed">
-              <AnimatePresence initial={false}>
-                {terminalLines.map((line, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.15 }}
-                    className={cn(
-                      "min-h-[1.4em]",
-                      line.type === "command" && "text-white/80",
-                      line.type === "info" && "text-white/40",
-                      line.type === "success" && "text-emerald-400/80",
-                      line.type === "done" && "font-medium text-emerald-400",
-                      line.type === "blank" && "h-2",
-                    )}
-                  >
-                    {line.type !== "blank" && line.text}
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-              {pushing && terminalLines.length > 0 && (
-                <Loader2 className="mt-1 size-3 animate-spin text-white/30" />
-              )}
-              {!pushing && terminalLines.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                  className="mt-3 flex items-center gap-1.5 text-emerald-400/60"
-                >
-                  <Check className="size-3" />
-                  <span className="text-[11px]">All changes pushed</span>
-                </motion.div>
-              )}
-            </div>
-          )}
+            {view === "code" ? (
+              <>
+                <div className={activeTab === "plans" ? "block" : "hidden"}>{plansCodeBlock}</div>
+                <div className={activeTab === "config" ? "block" : "hidden"}>{configCodeBlock}</div>
+              </>
+            ) : (
+              <div className="h-full bg-[#0e0e0e] p-4 font-mono text-[12px] leading-relaxed">
+                <AnimatePresence initial={false}>
+                  {terminalLines.map((line, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="min-h-[1.4em] whitespace-pre"
+                    >
+                      {line.segments.map((seg, j) => (
+                        <span key={j} className={seg.color}>
+                          {seg.text}
+                        </span>
+                      ))}
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+                {pushing && terminalLines.length > 0 && (
+                  <Loader2 className="mt-1 size-3 animate-spin text-white/30" />
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
