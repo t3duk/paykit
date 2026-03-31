@@ -4,12 +4,13 @@ import { track } from "@vercel/analytics";
 import { Github } from "lucide-react";
 import Link from "next/link";
 
+import { useComingSoon } from "@/components/coming-soon-dialog";
 import { Icons } from "@/components/icons";
 import { Section, SectionContent } from "@/components/layout/section";
 import { URLs } from "@/lib/consts";
 
 const navLinks = [
-  { label: "Docs", href: "/docs" },
+  { label: "Docs", href: "/docs", comingSoon: true },
   { label: "Enterprise", href: "/enterprise" },
   { label: "Author", href: URLs.authorX, external: true },
 ];
@@ -22,6 +23,8 @@ const socialLinks = [
 ];
 
 export function FooterSection() {
+  const showComingSoon = useComingSoon();
+
   return (
     <Section last>
       <SectionContent>
@@ -29,15 +32,28 @@ export function FooterSection() {
           <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1.5 sm:justify-start">
             {navLinks.map((link, i) => (
               <span key={link.label} className="flex items-center">
-                <Link
-                  href={link.href}
-                  target={link.external ? "_blank" : undefined}
-                  rel={link.external ? "noopener noreferrer" : undefined}
-                  className="text-foreground/45 hover:text-foreground/70 font-mono text-xs transition-colors"
-                  onClick={() => track("nav_clicked", { link: link.label, location: "footer" })}
-                >
-                  {link.label}
-                </Link>
+                {link.comingSoon ? (
+                  <button
+                    type="button"
+                    className="text-foreground/45 hover:text-foreground/70 font-mono text-xs transition-colors"
+                    onClick={() => {
+                      track("nav_clicked", { link: link.label, location: "footer" });
+                      showComingSoon();
+                    }}
+                  >
+                    {link.label}
+                  </button>
+                ) : (
+                  <Link
+                    href={link.href}
+                    target={link.external ? "_blank" : undefined}
+                    rel={link.external ? "noopener noreferrer" : undefined}
+                    className="text-foreground/45 hover:text-foreground/70 font-mono text-xs transition-colors"
+                    onClick={() => track("nav_clicked", { link: link.label, location: "footer" })}
+                  >
+                    {link.label}
+                  </Link>
+                )}
                 {i < navLinks.length - 1 && (
                   <span className="text-foreground/15 mx-2 text-xs select-none">/</span>
                 )}

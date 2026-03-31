@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 
+import { useComingSoon } from "@/components/coming-soon-dialog";
 import { LogoLockup } from "@/components/icons/logo";
 import { DashedLine } from "@/components/layout/section";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ interface NavItem {
   href: string;
   path?: string;
   external?: boolean;
+  comingSoon?: boolean;
 }
 
 function NavLink({
@@ -32,6 +34,24 @@ function NavLink({
   children: React.ReactNode;
   onClick?: () => void;
 }) {
+  const showComingSoon = useComingSoon();
+
+  if (item.comingSoon) {
+    return (
+      <button
+        type="button"
+        className={className}
+        onClick={() => {
+          track("nav_clicked", { link: item.name, location: "header" });
+          showComingSoon();
+          onClick?.();
+        }}
+      >
+        {children}
+      </button>
+    );
+  }
+
   return (
     <Link
       href={item.href}
@@ -52,7 +72,7 @@ function NavLink({
 
 const navTabs: NavItem[] = [
   { name: "readme", href: "/" },
-  { name: "docs", href: "/docs", path: "/docs" },
+  { name: "docs", href: "/docs", path: "/docs", comingSoon: true },
   { name: "enterprise", href: "/enterprise", path: "/enterprise" },
 ];
 
