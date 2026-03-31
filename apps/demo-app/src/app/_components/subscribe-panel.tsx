@@ -137,7 +137,7 @@ export function SubscribePanel() {
       <section className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium">Current plan</h2>
-          {activePlan && activePlan.amount != null ? (
+          {activePlan ? (
             <Button
               variant="outline"
               size="sm"
