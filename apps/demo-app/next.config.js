@@ -6,7 +6,7 @@ import "./src/env.js";
 
 /** @type {import("next").NextConfig} */
 const config = {
-  transpilePackages: ["paykitjs", "@paykitjs/stripe"],
+  transpilePackages: ["paykitjs", "@paykitjs/stripe", "autumn-js"],
   serverExternalPackages: ["pg"],
 };
 

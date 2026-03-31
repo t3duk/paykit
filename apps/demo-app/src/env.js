@@ -13,6 +13,7 @@ export const env = createEnv({
     STRIPE_SECRET_KEY: z.string().min(1),
     STRIPE_WEBHOOK_SECRET: z.string().min(1),
     BETTER_AUTH_SECRET: z.string().min(1),
+    AUTUMN_SECRET_KEY: z.string().min(1).optional(),
   },
 
   /**
@@ -35,6 +36,7 @@ export const env = createEnv({
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
     BETTER_AUTH_SECRET: process.env.BETTER_AUTH_SECRET,
+    AUTUMN_SECRET_KEY: process.env.AUTUMN_SECRET_KEY,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
   },
   /**

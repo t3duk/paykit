@@ -5,7 +5,8 @@ import { createPayKit } from "paykitjs";
 import { env } from "@/env";
 import { auth } from "@/server/auth";
 import { pool } from "@/server/db";
-import * as plans from "@/server/paykit.plans";
+
+import { free, pro, ultra } from "./plans";
 
 export const paykit = createPayKit({
   database: pool,
@@ -13,7 +14,7 @@ export const paykit = createPayKit({
     secretKey: env.STRIPE_SECRET_KEY,
     webhookSecret: env.STRIPE_WEBHOOK_SECRET,
   }),
-  plans,
+  plans: [pro, ultra, free],
   plugins: [
     dash({
       // authorize: async (request) => {
