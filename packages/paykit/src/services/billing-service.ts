@@ -34,6 +34,27 @@ export interface SubscribeResult {
   requiredAction?: ProviderRequiredAction | null;
 }
 
+const TIMESTAMP_KEYS = [
+  "startedAt",
+  "trialEndsAt",
+  "currentPeriodStartAt",
+  "currentPeriodEndAt",
+  "canceledAt",
+  "endedAt",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+/** Raw SQL via pg returns timestamps as strings. Coerce them to Date objects. */
+function coerceTimestamps<T extends Record<string, unknown>>(row: T): T {
+  for (const key of TIMESTAMP_KEYS) {
+    if (key in row && row[key] != null && typeof row[key] === "string") {
+      (row as Record<string, unknown>)[key] = new Date(row[key] as string);
+    }
+  }
+  return row;
+}
+
 export interface CustomerProductWithCatalog extends StoredCustomerProduct {
   planId: string;
   planGroup: string;
@@ -121,7 +142,8 @@ export async function getActiveCustomerProductInGroup(
     limit 1
   `)) as unknown as { rows: CustomerProductWithCatalog[] };
 
-  return result.rows[0] ?? null;
+  const row = result.rows[0];
+  return row ? coerceTimestamps(row) : null;
 }
 
 export async function getScheduledCustomerProductsInGroup(
@@ -169,7 +191,7 @@ export async function getScheduledCustomerProductsInGroup(
     order by cp.created_at desc
   `)) as unknown as { rows: CustomerProductWithCatalog[] };
 
-  return result.rows;
+  return result.rows.map(coerceTimestamps);
 }
 
 export async function getSubscriptionByProviderId(
@@ -288,6 +310,7 @@ export async function beginWebhookEvent(
     payload: Record<string, unknown>;
     providerEventId: string;
     providerId: string;
+    traceId?: string;
     type: string;
   },
 ): Promise<boolean> {
@@ -301,6 +324,7 @@ export async function beginWebhookEvent(
       providerId: input.providerId,
       receivedAt: new Date(),
       status: "processing",
+      traceId: input.traceId ?? null,
       type: input.type,
     });
     return true;
@@ -744,7 +768,7 @@ export async function getScheduledCustomerProductsReadyForSubscription(
     order by cp.created_at desc
   `)) as unknown as { rows: CustomerProductWithCatalog[] };
 
-  return result.rows;
+  return result.rows.map(coerceTimestamps);
 }
 
 export async function getCustomerProductsForSubscription(
@@ -863,7 +887,7 @@ export async function getCurrentCustomerPlans(
     }>;
   };
 
-  return result.rows;
+  return result.rows.map(coerceTimestamps);
 }
 
 export function buildSubscribeResult(input: {
