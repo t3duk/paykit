@@ -26,7 +26,7 @@ import {
   upsertSubscriptionRecord,
 } from "../services/billing-service";
 import {
-  deleteCustomerById,
+  deleteCustomerFromDatabase,
   getProviderCustomerByProviderCustomerId,
   syncCustomer,
 } from "../services/customer-service";
@@ -54,8 +54,8 @@ export interface HandleWebhookInput {
 }
 
 async function emitCustomerUpdated(ctx: PayKitContext, customerId: string): Promise<void> {
-  const plans = await getCurrentCustomerPlans(ctx.database, customerId);
-  const payload = { customerId, plans };
+  const subscriptions = await getCurrentCustomerPlans(ctx.database, customerId);
+  const payload = { customerId, subscriptions };
 
   try {
     await ctx.options.on?.["customer.updated"]?.({
@@ -395,7 +395,7 @@ async function applyAction(ctx: PayKitContext, action: WebhookApplyAction): Prom
   }
 
   if (action.type === "customer.delete") {
-    await deleteCustomerById(ctx.database, action.data.id);
+    await deleteCustomerFromDatabase(ctx.database, action.data.id);
     return action.data.id;
   }
 

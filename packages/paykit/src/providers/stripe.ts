@@ -617,11 +617,13 @@ export function createStripeProvider(
           ...data.metadata,
         },
         name: data.name,
-        // TODO: TEMPORARY — remove after test clock testing
-        test_clock: "clock_1TH4KHRT5B5GrIuhPMan0nMK",
       });
 
       return { providerCustomerId: customer.id };
+    },
+
+    async deleteCustomer(data) {
+      await client.customers.del(data.providerCustomerId);
     },
 
     async attachPaymentMethod(data) {
@@ -837,6 +839,16 @@ export function createStripeProvider(
         requiredAction: null,
         subscription: normalizeStripeSubscription(updatedSubscription),
       };
+    },
+
+    async listActiveSubscriptions(data) {
+      const subscriptions = await client.subscriptions.list({
+        customer: data.providerCustomerId,
+        status: "active",
+      });
+      return subscriptions.data.map((sub) => ({
+        providerSubscriptionId: sub.id,
+      }));
     },
 
     async resumeSubscription(data) {

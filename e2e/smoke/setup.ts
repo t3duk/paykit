@@ -221,7 +221,7 @@ export async function createTestCustomer(
   input: { id: string; email: string; name: string },
 ): Promise<{ customerId: string; providerCustomerId: string }> {
   // Create customer in PayKit DB
-  await t.paykit.ensureCustomer(input);
+  await t.paykit.upsertCustomer(input);
 
   // Subscribe to free plan — this triggers Stripe customer creation via
   // our test clock override and assigns the default free plan

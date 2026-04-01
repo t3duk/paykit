@@ -16,7 +16,7 @@ export const paykitRouter = createTRPCRouter({
       });
     }
 
-    await paykit.ensureCustomer({
+    await paykit.upsertCustomer({
       email: session.user.email,
       id: session.user.id,
       name: session.user.name ?? undefined,

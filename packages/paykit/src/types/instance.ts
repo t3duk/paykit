@@ -33,6 +33,36 @@ export interface PayKitSubscribeResult {
   } | null;
 }
 
+export interface CustomerSubscription {
+  planId: string;
+  status: string;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodStart: Date | null;
+  currentPeriodEnd: Date | null;
+}
+
+export interface CustomerEntitlement {
+  featureId: string;
+  balance: number;
+  limit: number;
+  usage: number;
+  unlimited: boolean;
+  nextResetAt: Date | null;
+}
+
+export interface CustomerWithDetails extends Customer {
+  subscriptions: CustomerSubscription[];
+  entitlements: Record<string, CustomerEntitlement>;
+}
+
+export interface ListCustomersResult {
+  data: CustomerWithDetails[];
+  total: number;
+  hasMore: boolean;
+  limit: number;
+  offset: number;
+}
+
 type PayKitEndpoint<TPath extends string, TBody, TResult> = ((ctx: {
   body: TBody;
 }) => Promise<TResult>) & {
@@ -48,12 +78,18 @@ export interface PayKitInstance<TOptions extends PayKitOptions = PayKitOptions> 
   options: TOptions;
   handler: (request: Request) => Promise<Response>;
   api: PayKitAPI<TOptions>;
-  ensureCustomer(input: {
+  upsertCustomer(input: {
     id: string;
     email?: string;
     name?: string;
     metadata?: Record<string, string>;
   }): Promise<Customer>;
+  deleteCustomer(input: { id: string }): Promise<{ success: true }>;
+  listCustomers(input?: {
+    limit?: number;
+    offset?: number;
+    planIds?: string[];
+  }): Promise<ListCustomersResult>;
   subscribe(input: PayKitSubscribeInput<TOptions>): Promise<PayKitSubscribeResult>;
   check(input: { customerId: string; featureId: string; required?: number }): Promise<CheckResult>;
   report(input: { customerId: string; featureId: string; amount?: number }): Promise<ReportResult>;

@@ -53,6 +53,8 @@ export interface StripeRuntime {
     metadata?: Record<string, string>;
   }): Promise<{ providerCustomerId: string }>;
 
+  deleteCustomer(data: { providerCustomerId: string }): Promise<void>;
+
   attachPaymentMethod(data: {
     providerCustomerId: string;
     returnURL: string;
@@ -96,6 +98,10 @@ export interface StripeRuntime {
     providerSubscriptionId: string;
     providerSubscriptionScheduleId?: string | null;
   }): Promise<ProviderSubscriptionResult>;
+
+  listActiveSubscriptions(data: {
+    providerCustomerId: string;
+  }): Promise<Array<{ providerSubscriptionId: string }>>;
 
   resumeSubscription(data: {
     providerSubscriptionId: string;
