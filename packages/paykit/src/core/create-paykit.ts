@@ -1,5 +1,9 @@
 import { createPayKitRouter, getEndpoints } from "../api";
-import { syncCustomerWithDefaults } from "../services/customer-service";
+import {
+  hardDeleteCustomer,
+  listCustomers,
+  syncCustomerWithDefaults,
+} from "../services/customer-service";
 import { checkEntitlement, reportEntitlement } from "../services/entitlement-service";
 import type { PayKitAPI, PayKitInstance } from "../types/instance";
 import type { PayKitOptions } from "../types/options";
@@ -52,9 +56,20 @@ export function createPayKit<const TOptions extends PayKitOptions>(
       return getEndpoints(getContext()) as unknown as PayKitAPI<TOptions>;
     },
 
-    async ensureCustomer(input) {
+    async upsertCustomer(input) {
       const ctx = await getContext();
       return syncCustomerWithDefaults(ctx, input);
+    },
+
+    async deleteCustomer(input) {
+      const ctx = await getContext();
+      await hardDeleteCustomer(ctx, input.id);
+      return { success: true };
+    },
+
+    async listCustomers(input) {
+      const ctx = await getContext();
+      return listCustomers(ctx, input);
     },
 
     async subscribe(input) {

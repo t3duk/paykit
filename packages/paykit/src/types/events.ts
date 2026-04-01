@@ -195,7 +195,7 @@ export type NormalizedWebhookEvent<
 export interface PayKitEventMap {
   "customer.updated": {
     customerId: string;
-    plans: readonly {
+    subscriptions: readonly {
       currentPeriodEndAt: Date | null;
       endedAt: Date | null;
       id: string;

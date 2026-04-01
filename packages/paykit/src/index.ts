@@ -1,7 +1,15 @@
 export { createPayKit } from "./core/create-paykit";
 
 export type { PayKitOptions } from "./types/options";
-export type { PayKitInstance, PayKitSubscribeInput, PayKitSubscribeResult } from "./types/instance";
+export type {
+  CustomerEntitlement,
+  CustomerSubscription,
+  CustomerWithDetails,
+  ListCustomersResult,
+  PayKitInstance,
+  PayKitSubscribeInput,
+  PayKitSubscribeResult,
+} from "./types/instance";
 export type { CheckResult, EntitlementBalance, ReportResult } from "./services/entitlement-service";
 export type {
   PayKitProvider,
