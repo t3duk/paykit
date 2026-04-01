@@ -14,7 +14,7 @@ export type PayKitSubscribeInput<TOptions extends PayKitOptions = PayKitOptions>
   successUrl?: string;
   cancelUrl?: string;
   customerId?: string;
-  redirectMode?: "always" | "if_required" | "never";
+  forceCheckout?: boolean;
 };
 
 export interface PayKitSubscribeResult {

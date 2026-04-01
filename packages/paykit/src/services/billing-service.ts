@@ -20,8 +20,6 @@ import type { NormalizedInvoice, NormalizedSubscription } from "../types/events"
 import type { StoredCustomerProduct, StoredInvoice, StoredSubscription } from "../types/models";
 import type { NormalizedPlanFeature } from "../types/schema";
 
-export type RedirectMode = "always" | "if_required" | "never";
-
 export interface SubscribeResult {
   invoice?: {
     currency: string;

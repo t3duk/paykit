@@ -25,7 +25,7 @@ export const subscribe = createPayKitEndpoint(
       successUrl: z.string().url().optional(),
       cancelUrl: z.string().url().optional(),
       customerId: z.string().optional(),
-      redirectMode: z.enum(["always", "if_required", "never"]).optional(),
+      forceCheckout: z.boolean().optional(),
       prorationBehavior: z.enum(["always_invoice", "none"]).optional(),
     }),
   },
@@ -34,9 +34,9 @@ export const subscribe = createPayKitEndpoint(
     return subscribeToPlan(ctx.context, {
       cancelUrl: ctx.body.cancelUrl,
       customerId,
+      forceCheckout: ctx.body.forceCheckout,
       planId: ctx.body.planId,
       prorationBehavior: ctx.body.prorationBehavior,
-      redirectMode: ctx.body.redirectMode ?? "if_required",
       successUrl: resolveSuccessUrl(ctx.request, ctx.body.successUrl),
     });
   },

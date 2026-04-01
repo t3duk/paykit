@@ -26,7 +26,6 @@ import {
   linkCustomerProductSubscription,
   linkMetadataToCheckoutSession,
   replaceCurrentProductSchedule,
-  type RedirectMode,
   type SubscribeResult,
   type CustomerProductWithCatalog,
   scheduleCustomerProductCancellation,
@@ -47,9 +46,9 @@ import { getDefaultProductInGroup, getLatestProductWithPrice } from "./product-s
 interface SubscribeInput {
   cancelUrl?: string;
   customerId: string;
+  forceCheckout?: boolean;
   planId: string;
   prorationBehavior?: "always_invoice" | "none";
-  redirectMode: RedirectMode;
   successUrl: string;
 }
 
@@ -71,7 +70,6 @@ interface SubscribeContext {
   prorationBehavior: "always_invoice" | "none";
   successUrl: string;
   cancelUrl?: string;
-  redirectMode: RedirectMode;
 }
 
 // ---------------------------------------------------------------------------
@@ -172,7 +170,7 @@ async function setupSubscribeContext(
     activeProduct != null && activeSubscription != null && targetAmount > activeAmount;
 
   const shouldUseCheckout =
-    isPaidTarget && input.redirectMode !== "never" && defaultPaymentMethod == null;
+    isPaidTarget && (input.forceCheckout === true || defaultPaymentMethod == null);
 
   return {
     activeProduct,
@@ -187,7 +185,6 @@ async function setupSubscribeContext(
     prorationBehavior: input.prorationBehavior ?? "always_invoice",
     providerCustomerId: providerCustomer.providerCustomerId,
     providerId,
-    redirectMode: input.redirectMode,
     scheduledProducts,
     shouldUseCheckout,
     storedPlan,
