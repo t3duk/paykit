@@ -14,7 +14,7 @@ export default async function MarketingLayout({ children }: { children: ReactNod
       <ComingSoonProvider>
         <div className="dark bg-background text-foreground relative h-dvh overflow-x-hidden">
           <NavigationBar stars={stars} />
-          <div className="absolute inset-0 overflow-x-hidden overflow-y-auto">
+          <div className="absolute inset-0 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable]">
             <PageTransition>{children}</PageTransition>
           </div>
         </div>
