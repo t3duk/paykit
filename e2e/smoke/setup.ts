@@ -194,8 +194,11 @@ export async function createTestPayKit(): Promise<TestPayKit> {
     dbPath: dbUrl,
     server,
     cleanup: async () => {
-      server.close();
+      // Delete test clock first — Stripe fires cleanup webhooks
       await stripeClient.testHelpers.testClocks.del(clock.id).catch(() => {});
+      // Wait for cleanup webhooks to arrive and be processed
+      await new Promise((resolve) => setTimeout(resolve, 10_000));
+      server.close();
       await pool.end();
       // Drop the test database
       const cleanupPool = new pg.Pool({

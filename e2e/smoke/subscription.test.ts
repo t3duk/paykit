@@ -26,8 +26,6 @@ describe("subscription lifecycle", () => {
   });
 
   afterAll(async () => {
-    // Wait for any remaining webhooks to be delivered before shutting down
-    await new Promise((resolve) => setTimeout(resolve, 5000));
     await t?.cleanup();
   });
 
