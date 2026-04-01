@@ -1,13 +1,31 @@
+"use client";
+
+import { motion } from "framer-motion";
 import Link from "next/link";
 
 import { LogoLockup } from "@/components/icons/logo";
 
+import { DashedLine } from "./section";
+
 export function MiniNavBar() {
   return (
-    <div className="border-foreground/[0.06] bg-background fixed top-0 right-0 left-0 z-50 flex items-center border-b px-5 py-3.5 sm:px-6 lg:px-7">
-      <Link href="/">
-        <LogoLockup className="h-5" />
-      </Link>
-    </div>
+    <motion.div
+      initial={{ y: -10, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      transition={{ duration: 0.28, delay: 0.04, ease: "easeOut" }}
+      className="bg-background fixed top-0 right-0 left-0 z-50 flex justify-center border-b"
+    >
+      <div className="relative w-full max-w-[76rem]">
+        <DashedLine orientation="vertical" />
+        <div className="absolute top-0 right-0 h-full">
+          <DashedLine orientation="vertical" />
+        </div>
+        <div className="flex items-center px-12 py-3.5">
+          <Link href="/">
+            <LogoLockup className="h-5" />
+          </Link>
+        </div>
+      </div>
+    </motion.div>
   );
 }
