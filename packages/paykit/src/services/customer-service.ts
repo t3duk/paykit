@@ -181,13 +181,11 @@ export async function findCustomerByProviderCustomerId(
   database: PayKitDatabase,
   input: { providerCustomerId: string; providerId: string },
 ): Promise<Customer | null> {
-  const result = (await database.execute(sql`
-    select *
-    from paykit_customer
-    where provider->${input.providerId}->>'id' = ${input.providerCustomerId}
-    limit 1
-  `)) as unknown as { rows: Customer[] };
-  return result.rows[0] ?? null;
+  return (
+    (await database.query.customer.findFirst({
+      where: sql`${customer.provider}->${input.providerId}->>'id' = ${input.providerCustomerId}`,
+    })) ?? null
+  );
 }
 
 export async function upsertProviderCustomer(

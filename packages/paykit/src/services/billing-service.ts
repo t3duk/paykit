@@ -192,34 +192,14 @@ export async function getSubscriptionByProviderSubscriptionId(
   database: PayKitDatabase,
   input: { providerId: string; providerSubscriptionId: string },
 ): Promise<StoredSubscription | null> {
-  const result = (await database.execute(sql`
-    select
-      id,
-      customer_id as "customerId",
-      product_internal_id as "productInternalId",
-      provider_id as "providerId",
-      provider_data as "providerData",
-      status,
-      canceled,
-      cancel_at_period_end as "cancelAtPeriodEnd",
-      started_at as "startedAt",
-      trial_ends_at as "trialEndsAt",
-      current_period_start_at as "currentPeriodStartAt",
-      current_period_end_at as "currentPeriodEndAt",
-      canceled_at as "canceledAt",
-      ended_at as "endedAt",
-      scheduled_product_id as "scheduledProductId",
-      quantity,
-      created_at as "createdAt",
-      updated_at as "updatedAt"
-    from paykit_subscription
-    where provider_id = ${input.providerId}
-      and provider_data->>'subscriptionId' = ${input.providerSubscriptionId}
-    limit 1
-  `)) as unknown as { rows: StoredSubscription[] };
-
-  const row = result.rows[0];
-  return row ? coerceTimestamps(row) : null;
+  return (
+    (await database.query.subscription.findFirst({
+      where: and(
+        eq(subscription.providerId, input.providerId),
+        sql`${subscription.providerData}->>'subscriptionId' = ${input.providerSubscriptionId}`,
+      ),
+    })) ?? null
+  );
 }
 
 export async function getSubscriptionById(
@@ -376,13 +356,12 @@ export async function upsertInvoiceRecord(
     invoiceId: input.invoice.providerInvoiceId,
   };
 
-  const existing = (await database.execute(sql`
-    select id
-    from paykit_invoice
-    where provider_id = ${input.providerId}
-      and provider_data->>'invoiceId' = ${input.invoice.providerInvoiceId}
-    limit 1
-  `)) as unknown as { rows: Array<{ id: string }> };
+  const existing = await database.query.invoice.findFirst({
+    where: and(
+      eq(invoice.providerId, input.providerId),
+      sql`${invoice.providerData}->>'invoiceId' = ${input.invoice.providerInvoiceId}`,
+    ),
+  });
 
   const values = {
     amount: input.invoice.totalAmount,
@@ -400,11 +379,11 @@ export async function upsertInvoiceRecord(
     updatedAt: now,
   };
 
-  if (existing.rows[0]) {
+  if (existing) {
     const rows = await database
       .update(invoice)
       .set(values)
-      .where(eq(invoice.id, existing.rows[0].id))
+      .where(eq(invoice.id, existing.id))
       .returning();
     const row = rows[0];
     if (!row) {
