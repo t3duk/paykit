@@ -1,9 +1,16 @@
-import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, count, countDistinct, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { PayKitContext } from "../core/context";
 import { PayKitError } from "../core/errors";
 import type { PayKitDatabase } from "../database";
-import { customer, entitlement, invoice, paymentMethod, subscription } from "../database/schema";
+import {
+  customer,
+  entitlement,
+  invoice,
+  paymentMethod,
+  product,
+  subscription,
+} from "../database/schema";
 import type {
   CustomerEntitlement,
   CustomerSubscription,
@@ -278,38 +285,31 @@ export async function listCustomers(
   let total: number;
 
   if (planIds && planIds.length > 0) {
-    const filteredResult = (await ctx.database.execute(sql`
-      select distinct c.*
-      from paykit_customer c
-      inner join paykit_subscription s on s.customer_id = c.id
-      inner join paykit_product p on p.internal_id = s.product_internal_id
-      where p.id in ${sql`(${sql.join(
-        planIds.map((id) => sql`${id}`),
-        sql`, `,
-      )})`}
-        and s.status in ('active', 'trialing', 'past_due')
-        and (s.ended_at is null or s.ended_at > now())
-        and c.deleted_at is null
-      order by c.created_at desc
-      limit ${limit}
-      offset ${offset}
-    `)) as unknown as { rows: Customer[] };
-    customerRows = filteredResult.rows;
+    const planFilter = and(
+      inArray(product.id, planIds),
+      inArray(subscription.status, ["active", "trialing", "past_due"]),
+      or(isNull(subscription.endedAt), sql`${subscription.endedAt} > now()`),
+      isNull(customer.deletedAt),
+    );
 
-    const countResult = (await ctx.database.execute(sql`
-      select count(distinct c.id)::int as count
-      from paykit_customer c
-      inner join paykit_subscription s on s.customer_id = c.id
-      inner join paykit_product p on p.internal_id = s.product_internal_id
-      where p.id in ${sql`(${sql.join(
-        planIds.map((id) => sql`${id}`),
-        sql`, `,
-      )})`}
-        and s.status in ('active', 'trialing', 'past_due')
-        and (s.ended_at is null or s.ended_at > now())
-        and c.deleted_at is null
-    `)) as unknown as { rows: Array<{ count: number }> };
-    total = countResult.rows[0]?.count ?? 0;
+    const filteredResult = await ctx.database
+      .selectDistinct({ customer })
+      .from(customer)
+      .innerJoin(subscription, eq(subscription.customerId, customer.id))
+      .innerJoin(product, eq(product.internalId, subscription.productInternalId))
+      .where(planFilter)
+      .orderBy(desc(customer.createdAt))
+      .limit(limit)
+      .offset(offset);
+    customerRows = filteredResult.map((r) => r.customer);
+
+    const countResult = await ctx.database
+      .select({ count: countDistinct(customer.id) })
+      .from(customer)
+      .innerJoin(subscription, eq(subscription.customerId, customer.id))
+      .innerJoin(product, eq(product.internalId, subscription.productInternalId))
+      .where(planFilter);
+    total = countResult[0]?.count ?? 0;
   } else {
     const countResult = await ctx.database
       .select({ count: count() })
@@ -329,75 +329,68 @@ export async function listCustomers(
   const data: CustomerWithDetails[] = [];
 
   if (customerIds.length > 0) {
-    const subscriptionRows = (await ctx.database.execute(sql`
-      select
-        s.customer_id as "customerId",
-        p.id as "planId",
-        s.status,
-        s.cancel_at_period_end as "cancelAtPeriodEnd",
-        s.current_period_start_at as "currentPeriodStart",
-        s.current_period_end_at as "currentPeriodEnd"
-      from paykit_subscription s
-      inner join paykit_product p on p.internal_id = s.product_internal_id
-      where s.customer_id in ${sql`(${sql.join(
-        customerIds.map((id) => sql`${id}`),
-        sql`, `,
-      )})`}
-        and s.status in ('active', 'trialing', 'past_due', 'scheduled')
-        and (s.ended_at is null or s.ended_at > now())
-      order by s.created_at desc
-    `)) as unknown as {
-      rows: Array<CustomerSubscription & { customerId: string }>;
-    };
+    const subRows = await ctx.database
+      .select({
+        customerId: subscription.customerId,
+        planId: product.id,
+        status: subscription.status,
+        cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+        currentPeriodStart: subscription.currentPeriodStartAt,
+        currentPeriodEnd: subscription.currentPeriodEndAt,
+      })
+      .from(subscription)
+      .innerJoin(product, eq(product.internalId, subscription.productInternalId))
+      .where(
+        and(
+          inArray(subscription.customerId, customerIds),
+          inArray(subscription.status, ["active", "trialing", "past_due", "scheduled"]),
+          or(isNull(subscription.endedAt), sql`${subscription.endedAt} > now()`),
+        ),
+      )
+      .orderBy(desc(subscription.createdAt));
 
-    const entitlementRows = (await ctx.database.execute(sql`
-      select
-        e.customer_id as "customerId",
-        e.feature_id as "featureId",
-        e.balance,
-        e."limit",
-        case when e."limit" is null then 0 else coalesce(e."limit", 0) - coalesce(e.balance, 0) end as "usage",
-        case when e."limit" is null then true else false end as "unlimited",
-        e.next_reset_at as "nextResetAt"
-      from paykit_entitlement e
-      inner join paykit_subscription s on s.id = e.subscription_id
-      where e.customer_id in ${sql`(${sql.join(
-        customerIds.map((id) => sql`${id}`),
-        sql`, `,
-      )})`}
-        and s.status in ('active', 'trialing', 'past_due')
-        and (s.ended_at is null or s.ended_at > now())
-    `)) as unknown as {
-      rows: Array<CustomerEntitlement & { customerId: string }>;
-    };
+    const entRows = await ctx.database
+      .select({
+        customerId: entitlement.customerId,
+        featureId: entitlement.featureId,
+        balance: entitlement.balance,
+        limit: entitlement.limit,
+        nextResetAt: entitlement.nextResetAt,
+      })
+      .from(entitlement)
+      .innerJoin(subscription, eq(subscription.id, entitlement.subscriptionId))
+      .where(
+        and(
+          inArray(entitlement.customerId, customerIds),
+          inArray(subscription.status, ["active", "trialing", "past_due"]),
+          or(isNull(subscription.endedAt), sql`${subscription.endedAt} > now()`),
+        ),
+      );
 
     const subscriptionsByCustomer = new Map<string, CustomerSubscription[]>();
-    for (const row of subscriptionRows) {
+    for (const row of subRows) {
       const list = subscriptionsByCustomer.get(row.customerId) ?? [];
       list.push({
         planId: row.planId,
         status: row.status,
         cancelAtPeriodEnd: row.cancelAtPeriodEnd,
-        currentPeriodStart: row.currentPeriodStart
-          ? new Date(row.currentPeriodStart as unknown as string)
-          : null,
-        currentPeriodEnd: row.currentPeriodEnd
-          ? new Date(row.currentPeriodEnd as unknown as string)
-          : null,
+        currentPeriodStart: row.currentPeriodStart,
+        currentPeriodEnd: row.currentPeriodEnd,
       });
       subscriptionsByCustomer.set(row.customerId, list);
     }
 
     const entitlementsByCustomer = new Map<string, Record<string, CustomerEntitlement>>();
-    for (const row of entitlementRows) {
+    for (const row of entRows) {
       const map = entitlementsByCustomer.get(row.customerId) ?? {};
+      const isUnlimited = row.limit === null;
       map[row.featureId] = {
         featureId: row.featureId,
-        balance: Number(row.balance),
-        limit: Number(row.limit),
-        usage: Number(row.usage),
-        unlimited: row.unlimited,
-        nextResetAt: row.nextResetAt ? new Date(row.nextResetAt as unknown as string) : null,
+        balance: row.balance ?? 0,
+        limit: row.limit ?? 0,
+        usage: isUnlimited ? 0 : (row.limit ?? 0) - (row.balance ?? 0),
+        unlimited: isUnlimited,
+        nextResetAt: row.nextResetAt,
       };
       entitlementsByCustomer.set(row.customerId, map);
     }

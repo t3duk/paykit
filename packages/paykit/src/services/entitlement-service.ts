@@ -1,6 +1,7 @@
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { PayKitDatabase } from "../database";
+import { entitlement, productFeature, subscription } from "../database/schema";
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -88,24 +89,32 @@ async function getActiveEntitlements(
   customerId: string,
   featureId: string,
 ): Promise<ActiveEntitlementRow[]> {
-  const result = (await db.execute(sql`
-    SELECT
-      ce.id,
-      ce.balance,
-      ce.next_reset_at AS "nextResetAt",
-      pf."limit" AS "originalLimit",
-      pf.reset_interval AS "resetInterval"
-    FROM paykit_entitlement ce
-    INNER JOIN paykit_subscription cp ON cp.id = ce.subscription_id
-    INNER JOIN paykit_product_feature pf
-      ON pf.product_internal_id = cp.product_internal_id
-      AND pf.feature_id = ce.feature_id
-    WHERE ce.customer_id = ${customerId}
-      AND ce.feature_id = ${featureId}
-      AND cp.status IN ('active', 'trialing')
-      AND (cp.ended_at IS NULL OR cp.ended_at > now())
-  `)) as unknown as { rows: ActiveEntitlementRow[] };
-  return result.rows;
+  const rows = await db
+    .select({
+      id: entitlement.id,
+      balance: entitlement.balance,
+      nextResetAt: entitlement.nextResetAt,
+      originalLimit: productFeature.limit,
+      resetInterval: productFeature.resetInterval,
+    })
+    .from(entitlement)
+    .innerJoin(subscription, eq(entitlement.subscriptionId, subscription.id))
+    .innerJoin(
+      productFeature,
+      and(
+        eq(productFeature.productInternalId, subscription.productInternalId),
+        eq(productFeature.featureId, entitlement.featureId),
+      ),
+    )
+    .where(
+      and(
+        eq(entitlement.customerId, customerId),
+        eq(entitlement.featureId, featureId),
+        inArray(subscription.status, ["active", "trialing"]),
+        or(isNull(subscription.endedAt), sql`${subscription.endedAt} > now()`),
+      ),
+    );
+  return rows as ActiveEntitlementRow[];
 }
 
 /** Lazy-reset any stale entitlements and return the refreshed rows. */
@@ -124,14 +133,14 @@ async function resetStaleEntitlements(
       row.originalLimit != null
     ) {
       const nextReset = addResetInterval(now, row.resetInterval);
-      await db.execute(sql`
-        UPDATE paykit_entitlement
-        SET balance = ${row.originalLimit},
-            next_reset_at = ${nextReset},
-            updated_at = ${now}
-        WHERE id = ${row.id}
-          AND next_reset_at <= ${now}
-      `);
+      await db
+        .update(entitlement)
+        .set({
+          balance: row.originalLimit,
+          nextResetAt: nextReset,
+          updatedAt: now,
+        })
+        .where(and(eq(entitlement.id, row.id), lte(entitlement.nextResetAt, now)));
       row.balance = row.originalLimit;
       row.nextResetAt = nextReset;
       changed = true;
@@ -197,16 +206,17 @@ export async function reportEntitlement(
   for (const row of rows) {
     if (row.originalLimit === null || row.balance < amount) continue;
 
-    const result = (await database.execute(sql`
-      UPDATE paykit_entitlement
-      SET balance = balance - ${amount}, updated_at = ${new Date()}
-      WHERE id = ${row.id}
-        AND balance >= ${amount}
-      RETURNING balance
-    `)) as unknown as { rows: Array<{ balance: number }> };
+    const result = await database
+      .update(entitlement)
+      .set({
+        balance: sql`${entitlement.balance} - ${amount}`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(entitlement.id, row.id), sql`${entitlement.balance} >= ${amount}`))
+      .returning({ balance: entitlement.balance });
 
-    if (result.rows.length > 0) {
-      row.balance = result.rows[0]!.balance;
+    if (result.length > 0) {
+      row.balance = result[0]!.balance!;
       deducted = true;
       break;
     }
