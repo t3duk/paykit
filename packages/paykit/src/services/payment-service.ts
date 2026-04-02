@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { generateId } from "../core/utils";
 import type { PayKitDatabase } from "../database";
@@ -27,22 +27,22 @@ export async function syncPaymentByProviderCustomer(
     methodId: input.payment.providerMethodId ?? null,
   };
 
-  const existing = (await database.execute(sql`
-    select id
-    from paykit_invoice
-    where provider_id = ${input.providerId}
-      and provider_data->>'paymentId' = ${input.payment.providerPaymentId}
-    limit 1
-  `)) as unknown as { rows: Array<{ id: string }> };
+  const existing = await database.query.invoice.findFirst({
+    where: and(
+      eq(invoice.providerId, input.providerId),
+      sql`${invoice.providerData}->>'paymentId' = ${input.payment.providerPaymentId}`,
+    ),
+  });
 
-  if (existing.rows[0]) {
-    await database.execute(sql`
-      update paykit_invoice
-      set status = ${input.payment.status},
-          amount = ${input.payment.amount},
-          updated_at = now()
-      where id = ${existing.rows[0].id}
-    `);
+  if (existing) {
+    await database
+      .update(invoice)
+      .set({
+        status: input.payment.status,
+        amount: input.payment.amount,
+        updatedAt: new Date(),
+      })
+      .where(eq(invoice.id, existing.id));
     return;
   }
 

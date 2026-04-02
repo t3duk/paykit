@@ -49,14 +49,13 @@ export async function syncPaymentMethodByProviderCustomer(
     expiryYear: input.paymentMethod.expiryYear ?? null,
   };
 
-  const existing = (await database.execute(sql`
-    select id, is_default as "isDefault"
-    from paykit_payment_method
-    where provider_id = ${input.providerId}
-      and provider_data->>'methodId' = ${input.paymentMethod.providerMethodId}
-      and deleted_at is null
-    limit 1
-  `)) as unknown as { rows: Array<{ id: string; isDefault: boolean }> };
+  const existingRow = await database.query.paymentMethod.findFirst({
+    where: and(
+      eq(paymentMethod.providerId, input.providerId),
+      sql`${paymentMethod.providerData}->>'methodId' = ${input.paymentMethod.providerMethodId}`,
+      isNull(paymentMethod.deletedAt),
+    ),
+  });
 
   if (input.paymentMethod.isDefault) {
     await database
@@ -70,7 +69,6 @@ export async function syncPaymentMethodByProviderCustomer(
       );
   }
 
-  const existingRow = existing.rows[0];
   if (existingRow) {
     await database
       .update(paymentMethod)
@@ -102,10 +100,17 @@ export async function deletePaymentMethodByProviderId(
     providerMethodId: string;
   },
 ): Promise<void> {
-  await database.execute(sql`
-    update paykit_payment_method
-    set deleted_at = now(), is_default = false, updated_at = now()
-    where provider_id = ${input.providerId}
-      and provider_data->>'methodId' = ${input.providerMethodId}
-  `);
+  await database
+    .update(paymentMethod)
+    .set({
+      deletedAt: new Date(),
+      isDefault: false,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(paymentMethod.providerId, input.providerId),
+        sql`${paymentMethod.providerData}->>'methodId' = ${input.providerMethodId}`,
+      ),
+    );
 }
