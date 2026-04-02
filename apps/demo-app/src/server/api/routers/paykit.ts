@@ -1,10 +1,13 @@
 import { TRPCError } from "@trpc/server";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { createTRPCRouter, publicProcedure } from "@/server/api/trpc";
 import { auth } from "@/server/auth";
-import { pool } from "@/server/db";
 import { paykit } from "@/server/paykit";
+
+import type { PayKitContext } from "../../../../../../packages/paykit/src/core/context";
+import { product, subscription } from "../../../../../../packages/paykit/src/database/schema";
 
 export const paykitRouter = createTRPCRouter({
   currentPlans: publicProcedure.query(async ({ ctx }) => {
@@ -22,37 +25,32 @@ export const paykitRouter = createTRPCRouter({
       name: session.user.name ?? undefined,
     });
 
-    const result = await pool.query<{
-      amount: number | null;
-      canceled: boolean;
-      currentPeriodEndAt: Date | null;
-      id: string;
-      interval: string | null;
-      name: string;
-      startedAt: Date | null;
-      status: string;
-    }>(
-      `
-      select
-        p.id,
-        p.name,
-        cp.status,
-        cp.canceled,
-        cp.started_at as "startedAt",
-        cp.current_period_end_at as "currentPeriodEndAt",
-        pr.amount,
-        pr.interval
-      from paykit_customer_product cp
-      inner join paykit_product p on p.internal_id = cp.product_internal_id
-      left join paykit_price pr on pr.product_internal_id = p.internal_id
-      where cp.customer_id = $1
-        and (cp.ended_at is null or cp.ended_at > now() or cp.status = 'scheduled')
-      order by cp.created_at desc
-    `,
-      [session.user.id],
-    );
+    const paykitCtx = (await paykit.$context) as PayKitContext;
 
-    return result.rows;
+    return paykitCtx.database
+      .select({
+        id: product.id,
+        name: product.name,
+        status: subscription.status,
+        canceled: subscription.canceled,
+        startedAt: subscription.startedAt,
+        currentPeriodEndAt: subscription.currentPeriodEndAt,
+        amount: product.priceAmount,
+        interval: product.priceInterval,
+      })
+      .from(subscription)
+      .innerJoin(product, eq(product.internalId, subscription.productInternalId))
+      .where(
+        and(
+          eq(subscription.customerId, session.user.id),
+          or(
+            isNull(subscription.endedAt),
+            sql`${subscription.endedAt} > now()`,
+            eq(subscription.status, "scheduled"),
+          ),
+        ),
+      )
+      .orderBy(desc(subscription.createdAt));
   }),
 
   checkFeature: publicProcedure
