@@ -18,9 +18,7 @@ export function HeroTitle() {
   }, []);
 
   return (
-    <div
-      className="relative flex w-full flex-col items-center text-center lg:items-start lg:text-left"
-    >
+    <div className="relative flex w-full flex-col items-center text-center lg:items-start lg:text-left">
       <div className="space-y-2.5 sm:space-y-4">
         <div className="flex items-center justify-center gap-1.5 lg:justify-start">
           <Sparkle
