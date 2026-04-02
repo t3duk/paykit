@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { generateId } from "../core/utils";
 import type { PayKitDatabase } from "../database";
@@ -20,18 +20,11 @@ export async function getFeatureById(
   database: PayKitDatabase,
   featureId: string,
 ): Promise<StoredFeature | null> {
-  const result = (await database.execute(sql`
-    select
-      id,
-      type,
-      created_at as "createdAt",
-      updated_at as "updatedAt"
-    from paykit_feature
-    where id = ${featureId}
-    limit 1
-  `)) as unknown as { rows: StoredFeature[] };
+  const result = await database.query.feature.findFirst({
+    where: eq(feature.id, featureId),
+  });
 
-  return result.rows[0] ?? null;
+  return result ?? null;
 }
 
 export async function upsertFeature(
@@ -150,20 +143,12 @@ export async function getProductFeatures(
   database: PayKitDatabase,
   productInternalId: string,
 ): Promise<readonly StoredProductFeature[]> {
-  const result = (await database.execute(sql`
-    select
-      product_internal_id as "productInternalId",
-      feature_id as "featureId",
-      "limit",
-      reset_interval as "resetInterval",
-      config,
-      created_at as "createdAt",
-      updated_at as "updatedAt"
-    from paykit_product_feature
-    where product_internal_id = ${productInternalId}
-  `)) as unknown as { rows: StoredProductFeature[] };
+  const result = await database.query.productFeature.findMany({
+    where: eq(productFeature.productInternalId, productInternalId),
+    orderBy: (pf) => [pf.featureId],
+  });
 
-  return result.rows.toSorted((left, right) => left.featureId.localeCompare(right.featureId));
+  return result;
 }
 
 export async function replaceProductFeatures(
@@ -266,27 +251,11 @@ export async function getDefaultProductInGroup(
   group: string,
   providerId: string,
 ): Promise<StoredProductWithPrice | null> {
-  const result = (await database.execute(sql`
-    select
-      internal_id as "internalId",
-      id,
-      version,
-      name,
-      "group",
-      is_default as "isDefault",
-      price_amount as "priceAmount",
-      price_interval as "priceInterval",
-      provider,
-      created_at as "createdAt",
-      updated_at as "updatedAt"
-    from paykit_product
-    where "group" = ${group}
-      and is_default = true
-    order by version desc
-    limit 1
-  `)) as unknown as { rows: StoredProduct[] };
+  const row = await database.query.product.findFirst({
+    where: and(eq(product.group, group), eq(product.isDefault, true)),
+    orderBy: [desc(product.version)],
+  });
 
-  const row = result.rows[0];
   if (!row) return null;
 
   const providerMap = (row.provider ?? {}) as Record<
@@ -306,25 +275,10 @@ export async function getProductByProviderPriceId(
   database: PayKitDatabase,
   input: { providerId: string; providerPriceId: string },
 ): Promise<StoredProductWithPrice | null> {
-  const result = (await database.execute(sql`
-    select
-      internal_id as "internalId",
-      id,
-      version,
-      name,
-      "group",
-      is_default as "isDefault",
-      price_amount as "priceAmount",
-      price_interval as "priceInterval",
-      provider,
-      created_at as "createdAt",
-      updated_at as "updatedAt"
-    from paykit_product
-    where provider->${input.providerId}->>'priceId' = ${input.providerPriceId}
-    limit 1
-  `)) as unknown as { rows: StoredProduct[] };
+  const row = await database.query.product.findFirst({
+    where: sql`${product.provider}->${input.providerId}->>'priceId' = ${input.providerPriceId}`,
+  });
 
-  const row = result.rows[0];
   if (!row) return null;
 
   const providerMap = (row.provider ?? {}) as Record<

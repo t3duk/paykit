@@ -1,8 +1,15 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import { generateId } from "../core/utils";
 import type { PayKitDatabase } from "../database";
-import { entitlement, invoice, metadata, subscription, webhookEvent } from "../database/schema";
+import {
+  entitlement,
+  invoice,
+  metadata,
+  product,
+  subscription,
+  webhookEvent,
+} from "../database/schema";
 import type {
   ProviderInvoice,
   ProviderRequiredAction,
@@ -22,26 +29,6 @@ export interface SubscribeResult {
   };
   paymentUrl: string | null;
   requiredAction?: ProviderRequiredAction | null;
-}
-
-const TIMESTAMP_KEYS = [
-  "startedAt",
-  "trialEndsAt",
-  "currentPeriodStartAt",
-  "currentPeriodEndAt",
-  "canceledAt",
-  "endedAt",
-  "createdAt",
-  "updatedAt",
-] as const;
-
-function coerceTimestamps<T extends Record<string, unknown>>(row: T): T {
-  for (const key of TIMESTAMP_KEYS) {
-    if (key in row && row[key] != null && typeof row[key] === "string") {
-      (row as Record<string, unknown>)[key] = new Date(row[key] as string);
-    }
-  }
-  return row;
 }
 
 export interface SubscriptionWithCatalog extends StoredSubscription {
@@ -85,107 +72,66 @@ function normalizeInvoice(
 
 type ProviderProductMap = Record<string, { productId: string; priceId: string | null }>;
 
+function mapJoinRowToSubscriptionWithCatalog(row: {
+  subscription: typeof subscription.$inferSelect;
+  product: typeof product.$inferSelect;
+}): SubscriptionWithCatalog {
+  const providerMap = row.product.provider as ProviderProductMap | null;
+  return {
+    ...row.subscription,
+    planId: row.product.id,
+    planGroup: row.product.group,
+    planIsDefault: row.product.isDefault,
+    planName: row.product.name,
+    priceAmount: row.product.priceAmount,
+    priceInterval: row.product.priceInterval,
+    providerPriceId: Object.values(providerMap ?? {})[0]?.priceId ?? null,
+  };
+}
+
 export async function getActiveSubscriptionInGroup(
   database: PayKitDatabase,
   input: { customerId: string; group: string },
 ): Promise<SubscriptionWithCatalog | null> {
-  const result = (await database.execute(sql`
-    select
-      s.id,
-      s.customer_id as "customerId",
-      s.product_internal_id as "productInternalId",
-      s.provider_id as "providerId",
-      s.provider_data as "providerData",
-      s.status,
-      s.canceled,
-      s.cancel_at_period_end as "cancelAtPeriodEnd",
-      s.started_at as "startedAt",
-      s.trial_ends_at as "trialEndsAt",
-      s.current_period_start_at as "currentPeriodStartAt",
-      s.current_period_end_at as "currentPeriodEndAt",
-      s.canceled_at as "canceledAt",
-      s.ended_at as "endedAt",
-      s.scheduled_product_id as "scheduledProductId",
-      s.quantity,
-      s.created_at as "createdAt",
-      s.updated_at as "updatedAt",
-      p.id as "planId",
-      p.name as "planName",
-      p."group" as "planGroup",
-      p.is_default as "planIsDefault",
-      p.price_amount as "priceAmount",
-      p.price_interval as "priceInterval",
-      p.provider as "productProvider"
-    from paykit_subscription s
-    inner join paykit_product p on p.internal_id = s.product_internal_id
-    where s.customer_id = ${input.customerId}
-      and p."group" = ${input.group}
-      and s.status in ('active', 'trialing', 'past_due')
-      and (s.ended_at is null or s.ended_at > now())
-    order by s.created_at desc
-    limit 1
-  `)) as unknown as {
-    rows: Array<SubscriptionWithCatalog & { productProvider: ProviderProductMap }>;
-  };
+  const rows = await database
+    .select()
+    .from(subscription)
+    .innerJoin(product, eq(subscription.productInternalId, product.internalId))
+    .where(
+      and(
+        eq(subscription.customerId, input.customerId),
+        eq(product.group, input.group),
+        inArray(subscription.status, ["active", "trialing", "past_due"]),
+        or(isNull(subscription.endedAt), sql`${subscription.endedAt} > now()`),
+      ),
+    )
+    .orderBy(desc(subscription.createdAt))
+    .limit(1);
 
-  const row = result.rows[0];
+  const row = rows[0];
   if (!row) return null;
-  const { productProvider, ...rest } = row;
-  return coerceTimestamps({
-    ...rest,
-    providerPriceId: Object.values(productProvider ?? {})[0]?.priceId ?? null,
-  });
+  return mapJoinRowToSubscriptionWithCatalog(row);
 }
 
 export async function getScheduledSubscriptionsInGroup(
   database: PayKitDatabase,
   input: { customerId: string; group: string },
 ): Promise<readonly SubscriptionWithCatalog[]> {
-  const result = (await database.execute(sql`
-    select
-      s.id,
-      s.customer_id as "customerId",
-      s.product_internal_id as "productInternalId",
-      s.provider_id as "providerId",
-      s.provider_data as "providerData",
-      s.status,
-      s.canceled,
-      s.cancel_at_period_end as "cancelAtPeriodEnd",
-      s.started_at as "startedAt",
-      s.trial_ends_at as "trialEndsAt",
-      s.current_period_start_at as "currentPeriodStartAt",
-      s.current_period_end_at as "currentPeriodEndAt",
-      s.canceled_at as "canceledAt",
-      s.ended_at as "endedAt",
-      s.scheduled_product_id as "scheduledProductId",
-      s.quantity,
-      s.created_at as "createdAt",
-      s.updated_at as "updatedAt",
-      p.id as "planId",
-      p.name as "planName",
-      p."group" as "planGroup",
-      p.is_default as "planIsDefault",
-      p.price_amount as "priceAmount",
-      p.price_interval as "priceInterval",
-      p.provider as "productProvider"
-    from paykit_subscription s
-    inner join paykit_product p on p.internal_id = s.product_internal_id
-    where s.customer_id = ${input.customerId}
-      and p."group" = ${input.group}
-      and s.status = 'scheduled'
-      and s.ended_at is null
-    order by s.created_at desc
-  `)) as unknown as {
-    rows: Array<SubscriptionWithCatalog & { productProvider: ProviderProductMap }>;
-  };
+  const rows = await database
+    .select()
+    .from(subscription)
+    .innerJoin(product, eq(subscription.productInternalId, product.internalId))
+    .where(
+      and(
+        eq(subscription.customerId, input.customerId),
+        eq(product.group, input.group),
+        eq(subscription.status, "scheduled"),
+        isNull(subscription.endedAt),
+      ),
+    )
+    .orderBy(desc(subscription.createdAt));
 
-  return result.rows.map((row) => {
-    const { productProvider, ...rest } = row;
-    return coerceTimestamps({
-      ...rest,
-      providerPriceId: Object.values(productProvider ?? {})[0]?.priceId ?? null,
-    });
-  });
+  return rows.map(mapJoinRowToSubscriptionWithCatalog);
 }
 
 export async function getSubscriptionByProviderSubscriptionId(
@@ -611,52 +557,22 @@ export async function getScheduledSubscriptionsReadyForActivation(
     now: Date;
   },
 ): Promise<readonly SubscriptionWithCatalog[]> {
-  const result = (await database.execute(sql`
-    select
-      s.id,
-      s.customer_id as "customerId",
-      s.product_internal_id as "productInternalId",
-      s.provider_id as "providerId",
-      s.provider_data as "providerData",
-      s.status,
-      s.canceled,
-      s.cancel_at_period_end as "cancelAtPeriodEnd",
-      s.started_at as "startedAt",
-      s.trial_ends_at as "trialEndsAt",
-      s.current_period_start_at as "currentPeriodStartAt",
-      s.current_period_end_at as "currentPeriodEndAt",
-      s.canceled_at as "canceledAt",
-      s.ended_at as "endedAt",
-      s.scheduled_product_id as "scheduledProductId",
-      s.quantity,
-      s.created_at as "createdAt",
-      s.updated_at as "updatedAt",
-      p.id as "planId",
-      p.name as "planName",
-      p."group" as "planGroup",
-      p.is_default as "planIsDefault",
-      p.price_amount as "priceAmount",
-      p.price_interval as "priceInterval",
-      p.provider as "productProvider"
-    from paykit_subscription s
-    inner join paykit_product p on p.internal_id = s.product_internal_id
-    where s.customer_id = ${input.customerId}
-      and p."group" = ${input.group}
-      and s.status = 'scheduled'
-      and s.ended_at is null
-      and (s.started_at is null or s.started_at <= ${input.now})
-    order by s.created_at desc
-  `)) as unknown as {
-    rows: Array<SubscriptionWithCatalog & { productProvider: ProviderProductMap }>;
-  };
+  const rows = await database
+    .select()
+    .from(subscription)
+    .innerJoin(product, eq(subscription.productInternalId, product.internalId))
+    .where(
+      and(
+        eq(subscription.customerId, input.customerId),
+        eq(product.group, input.group),
+        eq(subscription.status, "scheduled"),
+        isNull(subscription.endedAt),
+        or(isNull(subscription.startedAt), lte(subscription.startedAt, input.now)),
+      ),
+    )
+    .orderBy(desc(subscription.createdAt));
 
-  return result.rows.map((row) => {
-    const { productProvider, ...rest } = row;
-    return coerceTimestamps({
-      ...rest,
-      providerPriceId: Object.values(productProvider ?? {})[0]?.priceId ?? null,
-    });
-  });
+  return rows.map(mapJoinRowToSubscriptionWithCatalog);
 }
 
 export async function syncSubscriptionFromProvider(
@@ -739,29 +655,27 @@ export async function getCurrentSubscriptions(
     status: string;
   }[]
 > {
-  const result = (await database.execute(sql`
-    select
-      p.id,
-      s.status,
-      s.started_at as "startedAt",
-      s.current_period_end_at as "currentPeriodEndAt",
-      s.ended_at as "endedAt"
-    from paykit_subscription s
-    inner join paykit_product p on p.internal_id = s.product_internal_id
-    where s.customer_id = ${customerId}
-      and (s.ended_at is null or s.ended_at > now() or s.status = 'scheduled')
-    order by s.created_at desc
-  `)) as unknown as {
-    rows: Array<{
-      currentPeriodEndAt: Date | null;
-      endedAt: Date | null;
-      id: string;
-      startedAt: Date | null;
-      status: string;
-    }>;
-  };
-
-  return result.rows.map(coerceTimestamps);
+  return database
+    .select({
+      currentPeriodEndAt: subscription.currentPeriodEndAt,
+      endedAt: subscription.endedAt,
+      id: product.id,
+      startedAt: subscription.startedAt,
+      status: subscription.status,
+    })
+    .from(subscription)
+    .innerJoin(product, eq(subscription.productInternalId, product.internalId))
+    .where(
+      and(
+        eq(subscription.customerId, customerId),
+        or(
+          isNull(subscription.endedAt),
+          sql`${subscription.endedAt} > now()`,
+          eq(subscription.status, "scheduled"),
+        ),
+      ),
+    )
+    .orderBy(desc(subscription.createdAt));
 }
 
 export function buildSubscribeResult(input: {
