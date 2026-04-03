@@ -1,9 +1,8 @@
-import * as z from "zod";
-
 import { PayKitError, PAYKIT_ERROR_CODES } from "../../core/errors";
 import { createPayKitEndpoint } from "../call";
 import { resolveCustomer } from "../resolve-customer";
 import { subscribeToPlan } from "./subscribe.service";
+import { subscribeBodySchema } from "./subscribe.types";
 
 function resolveSuccessUrl(request: Request | undefined, explicitSuccessUrl?: string): string {
   if (explicitSuccessUrl) {
@@ -21,14 +20,7 @@ export const subscribe = createPayKitEndpoint(
   "/subscribe",
   {
     method: "POST",
-    body: z.object({
-      planId: z.string(),
-      successUrl: z.string().url().optional(),
-      cancelUrl: z.string().url().optional(),
-      customerId: z.string().optional(),
-      forceCheckout: z.boolean().optional(),
-      prorationBehavior: z.enum(["always_invoice", "none"]).optional(),
-    }),
+    body: subscribeBodySchema,
   },
   async (ctx) => {
     const customerId = await resolveCustomer(ctx.context, ctx.request, ctx.body.customerId);

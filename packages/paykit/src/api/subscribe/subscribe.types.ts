@@ -1,9 +1,25 @@
+import * as z from "zod";
+
 import type {
   ProviderInvoice,
   ProviderRequiredAction,
   ProviderSubscription,
 } from "../../providers/provider";
 import type { NormalizedPlanFeature } from "../../types/schema";
+
+export const subscribeBodySchema = z.object({
+  planId: z.string(),
+  successUrl: z.string().url().optional(),
+  cancelUrl: z.string().url().optional(),
+  customerId: z.string().optional(),
+  forceCheckout: z.boolean().optional(),
+  prorationBehavior: z.enum(["always_invoice", "none"]).optional(),
+});
+
+export type SubscribeBody = z.infer<typeof subscribeBodySchema>;
+
+export type SubscribeInput = Required<Pick<SubscribeBody, "customerId" | "successUrl">> &
+  Omit<SubscribeBody, "customerId" | "successUrl">;
 
 export type StripeSubscriptionAction =
   | {

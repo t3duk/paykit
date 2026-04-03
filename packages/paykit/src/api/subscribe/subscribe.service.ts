@@ -35,17 +35,9 @@ import type {
   StripeExecutionResult,
   StripeBillingPlan,
   StripeSubscriptionAction,
+  SubscribeInput,
 } from "./subscribe.types";
 import { serializeBillingPlan } from "./subscribe.types";
-
-interface SubscribeInput {
-  cancelUrl?: string;
-  customerId: string;
-  forceCheckout?: boolean;
-  planId: string;
-  prorationBehavior?: "always_invoice" | "none";
-  successUrl: string;
-}
 
 interface SubscribeContext {
   customerId: string;
