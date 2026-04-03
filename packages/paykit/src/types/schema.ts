@@ -104,7 +104,6 @@ export interface PayKitPlanConfig<TId extends string = string> {
   includes?: readonly PayKitFeatureInclude[];
   name?: string;
   price?: PlanPrice;
-  trial?: { days: number };
 }
 
 export type PayKitPlan<TConfig extends PayKitPlanConfig = PayKitPlanConfig> = Readonly<
@@ -293,9 +292,6 @@ export function plan<const TConfig extends PayKitPlanConfig>(config: TConfig): P
       includes: z.array(z.unknown()).optional(),
       name: planNameSchema.optional(),
       price: priceSchema.optional(),
-      trial: z
-        .object({ days: z.number().int().positive("Trial days must be a positive integer") })
-        .optional(),
     })
     .safeParse(config);
 
