@@ -1,4 +1,5 @@
 import type { PayKitContext } from "../core/context";
+import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
 import type { StoredProductFeature } from "../types/models";
 import type { NormalizedPlan, NormalizedPlanFeature } from "../types/schema";
 import {
@@ -140,7 +141,11 @@ export async function syncProducts(ctx: PayKitContext): Promise<SyncProductResul
     }
 
     if (!storedProduct) {
-      throw new Error(`Failed to sync plan "${plan.id}".`);
+      throw PayKitError.from(
+        "INTERNAL_SERVER_ERROR",
+        PAYKIT_ERROR_CODES.PLAN_SYNC_FAILED,
+        `Failed to sync plan "${plan.id}"`,
+      );
     }
 
     if (storedProduct.priceAmount !== null && storedProduct.priceInterval !== null) {

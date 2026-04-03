@@ -57,6 +57,9 @@ export type {
 
 export type { PayKitPlugin } from "./types/plugin";
 
-export { PayKitError } from "./core/errors";
+export { PayKitError, PAYKIT_ERROR_CODES } from "./core/errors";
+export type { PayKitErrorCode } from "./core/errors";
+export { defineErrorCodes } from "./core/error-codes";
+export type { RawError } from "./core/error-codes";
 export { feature, plan } from "./types/schema";
 export { createPayKitEndpoint } from "./api/call";

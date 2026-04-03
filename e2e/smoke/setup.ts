@@ -21,15 +21,10 @@ import {
 import { syncPaymentMethodByProviderCustomer } from "../../packages/paykit/src/services/payment-method-service";
 import { syncProducts } from "../../packages/paykit/src/services/product-sync-service";
 
-// Load env from repo root
 config({ path: path.resolve(import.meta.dirname, "../../.env") });
 config({ path: path.resolve(import.meta.dirname, "../../.env.local"), override: true });
 
 const WEBHOOK_PORT = 4567;
-
-// ---------------------------------------------------------------------------
-// Test plans
-// ---------------------------------------------------------------------------
 
 const messagesFeature = feature({ id: "messages", type: "metered" });
 const dashboardFeature = feature({ id: "dashboard", type: "boolean" });
@@ -71,10 +66,6 @@ export const ultraPlan = plan({
   price: { amount: 200, interval: "month" },
 });
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 export interface TestPayKit {
   paykit: ReturnType<typeof createPayKit>;
   database: PayKitDatabase;
@@ -86,9 +77,7 @@ export interface TestPayKit {
   cleanup: () => Promise<void>;
 }
 
-// ---------------------------------------------------------------------------
 // createTestPayKit
-// ---------------------------------------------------------------------------
 
 export async function createTestPayKit(): Promise<TestPayKit> {
   const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -226,10 +215,6 @@ export async function createTestPayKit(): Promise<TestPayKit> {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Customer helper
-// ---------------------------------------------------------------------------
-
 /**
  * Creates a PayKit customer and subscribes to Free (triggers Stripe customer
  * creation on the test clock). No payment method attached — first paid
@@ -298,10 +283,6 @@ export async function createTestCustomerWithPM(
 
   return { customerId, providerCustomerId };
 }
-
-// ---------------------------------------------------------------------------
-// Assertion helpers
-// ---------------------------------------------------------------------------
 
 export async function expectProduct(
   database: PayKitDatabase,
@@ -571,10 +552,6 @@ export async function fakeCheckoutCompletion(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Webhook server
-// ---------------------------------------------------------------------------
-
 function startWebhookServer(paykit: ReturnType<typeof createPayKit>): Server {
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const chunks: Buffer[] = [];
@@ -608,10 +585,6 @@ function startWebhookServer(paykit: ReturnType<typeof createPayKit>): Server {
   server.listen(WEBHOOK_PORT);
   return server;
 }
-
-// ---------------------------------------------------------------------------
-// Clock + webhook helpers
-// ---------------------------------------------------------------------------
 
 export async function advanceTestClock(
   stripeClient: Stripe,
@@ -784,10 +757,6 @@ export async function fakeSubscriptionDeletedEvent(
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Failure dump
-// ---------------------------------------------------------------------------
 
 export async function dumpStateOnFailure(database: PayKitDatabase, dbPath: string): Promise<void> {
   console.error("\n=== SMOKE TEST FAILURE — DB STATE DUMP ===");

@@ -3,10 +3,6 @@ import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { PayKitDatabase } from "../database";
 import { entitlement, productFeature, subscription } from "../database/schema";
 
-// ---------------------------------------------------------------------------
-// Result types
-// ---------------------------------------------------------------------------
-
 export interface EntitlementBalance {
   limit: number;
   remaining: number;
@@ -24,10 +20,6 @@ export interface ReportResult {
   success: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Internal row shapes
-// ---------------------------------------------------------------------------
-
 interface ActiveEntitlementRow {
   balance: number;
   id: string;
@@ -35,10 +27,6 @@ interface ActiveEntitlementRow {
   originalLimit: number | null;
   resetInterval: string | null;
 }
-
-// ---------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------
 
 function addResetInterval(date: Date, resetInterval: string): Date {
   const next = new Date(date);
@@ -152,9 +140,7 @@ async function resetStaleEntitlements(
   return rows;
 }
 
-// ---------------------------------------------------------------------------
 // check — read entitlements with lazy reset
-// ---------------------------------------------------------------------------
 
 export async function checkEntitlement(
   database: PayKitDatabase,
@@ -178,9 +164,7 @@ export async function checkEntitlement(
   return { allowed: balance.remaining >= required, balance };
 }
 
-// ---------------------------------------------------------------------------
 // report — lazy reset + atomic decrement
-// ---------------------------------------------------------------------------
 
 export async function reportEntitlement(
   database: PayKitDatabase,

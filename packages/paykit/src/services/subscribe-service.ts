@@ -1,4 +1,5 @@
 import type { PayKitContext } from "../core/context";
+import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
 import { runWithTrace } from "../core/trace";
 import type { ProviderSubscription } from "../providers/provider";
 import type {
@@ -35,10 +36,6 @@ import { getDefaultPaymentMethod } from "./payment-method-service";
 import type { StoredProductWithPrice } from "./product-service";
 import { getDefaultProductInGroup, getLatestProductWithPrice } from "./product-service";
 
-// ---------------------------------------------------------------------------
-// Subscribe context — assembled in setup, passed through all stages
-// ---------------------------------------------------------------------------
-
 interface SubscribeInput {
   cancelUrl?: string;
   customerId: string;
@@ -66,10 +63,6 @@ interface SubscribeContext {
   successUrl: string;
   cancelUrl?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Main entry point — 4-stage pipeline
-// ---------------------------------------------------------------------------
 
 export async function subscribeToPlan(
   ctx: PayKitContext,
@@ -107,10 +100,6 @@ export async function subscribeToPlan(
   });
 }
 
-// ---------------------------------------------------------------------------
-// Stage 1: Setup — gather all data needed for decision-making
-// ---------------------------------------------------------------------------
-
 async function setupSubscribeContext(
   ctx: PayKitContext,
   input: SubscribeInput,
@@ -123,14 +112,22 @@ async function setupSubscribeContext(
   });
 
   if (!normalizedPlan || !storedPlan) {
-    throw new Error(`Plan "${input.planId}" not found. Run: paykitjs sync-products`);
+    throw PayKitError.from(
+      "NOT_FOUND",
+      PAYKIT_ERROR_CODES.PLAN_NOT_FOUND,
+      `Plan "${input.planId}" not found`,
+    );
   }
 
   const isFreeTarget = storedPlan.priceAmount === null;
   const isPaidTarget = !isFreeTarget;
 
   if (isPaidTarget && !storedPlan.providerPriceId) {
-    throw new Error(`Plan "${input.planId}" is not synced. Run: paykitjs sync-products`);
+    throw PayKitError.from(
+      "BAD_REQUEST",
+      PAYKIT_ERROR_CODES.PLAN_NOT_SYNCED,
+      `Plan "${input.planId}" is not synced with provider`,
+    );
   }
 
   const { providerCustomerId } = await upsertProviderCustomer(ctx, {
@@ -186,10 +183,6 @@ async function setupSubscribeContext(
     trialDays: normalizedPlan.trialDays,
   };
 }
-
-// ---------------------------------------------------------------------------
-// Stage 2: Compute — pure function, no side effects
-// ---------------------------------------------------------------------------
 
 function computeBillingPlan(subCtx: SubscribeContext): PayKitBillingPlan {
   const { activeSubscription, scheduledSubscriptions, storedPlan, normalizedPlan } = subCtx;
@@ -348,10 +341,6 @@ function computeBillingPlan(subCtx: SubscribeContext): PayKitBillingPlan {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Stage 3: Evaluate — translate PayKit plan to Stripe actions
-// ---------------------------------------------------------------------------
-
 function getProviderSubId(sub: SubscriptionWithCatalog): string {
   return (sub.providerData as Record<string, unknown>)?.subscriptionId as string;
 }
@@ -487,10 +476,6 @@ function buildCheckoutAction(subCtx: SubscribeContext): StripeCheckoutAction {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Stage 4: Execute — run Stripe calls, then DB mutations
-// ---------------------------------------------------------------------------
-
 async function executeBillingPlan(
   ctx: PayKitContext,
   subCtx: SubscribeContext,
@@ -609,9 +594,7 @@ export async function executeStripeAction(
   });
 }
 
-// ---------------------------------------------------------------------------
 // Shared DB mutation executor — used by both direct path and webhook deferred path
-// ---------------------------------------------------------------------------
 
 export async function executePayKitPlan(
   ctx: PayKitContext,
@@ -770,10 +753,6 @@ export async function executePayKitPlan(
     }
   });
 }
-
-// ---------------------------------------------------------------------------
-// Utilities
-// ---------------------------------------------------------------------------
 
 export async function resolveFallbackSuccessPlanId(
   ctx: PayKitContext,

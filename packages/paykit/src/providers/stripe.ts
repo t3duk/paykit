@@ -1,5 +1,6 @@
 import StripeSdk from "stripe";
 
+import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
 import type { NormalizedWebhookEvent, PayKitEventError } from "../types/events";
 import type { StripeProviderConfig, StripeRuntime } from "./provider";
 
@@ -623,7 +624,7 @@ export function createStripeProvider(
       });
 
       if (!session.url) {
-        throw new Error("Stripe setup session did not include a URL.");
+        throw PayKitError.from("BAD_REQUEST", PAYKIT_ERROR_CODES.PROVIDER_SESSION_INVALID);
       }
 
       return { url: session.url };
@@ -647,7 +648,7 @@ export function createStripeProvider(
       const session = await client.checkout.sessions.create(sessionParams);
 
       if (!session.url) {
-        throw new Error("Stripe subscription Checkout session did not include a URL.");
+        throw PayKitError.from("BAD_REQUEST", PAYKIT_ERROR_CODES.PROVIDER_SESSION_INVALID);
       }
 
       return {
@@ -695,7 +696,10 @@ export function createStripeProvider(
       );
       const currentItem = currentSubscription.items.data[0];
       if (!currentItem) {
-        throw new Error("Stripe subscription did not include any items.");
+        throw PayKitError.from(
+          "BAD_REQUEST",
+          PAYKIT_ERROR_CODES.PROVIDER_SUBSCRIPTION_MISSING_ITEMS,
+        );
       }
 
       const updatedSubscription = (await client.subscriptions.update(data.providerSubscriptionId, {
@@ -730,7 +734,7 @@ export function createStripeProvider(
 
     async scheduleSubscriptionChange(data) {
       if (!data.providerPriceId) {
-        throw new Error("A providerPriceId is required to schedule a subscription change.");
+        throw PayKitError.from("BAD_REQUEST", PAYKIT_ERROR_CODES.PROVIDER_PRICE_REQUIRED);
       }
 
       // Fetch the current subscription to get the current price and period end.
@@ -739,7 +743,10 @@ export function createStripeProvider(
       })) as StripeSubscriptionWithExtras;
       const periodEndSeconds = getLatestPeriodEnd(currentSub);
       if (typeof periodEndSeconds !== "number") {
-        throw new Error("Stripe subscription did not include current_period_end.");
+        throw PayKitError.from(
+          "BAD_REQUEST",
+          PAYKIT_ERROR_CODES.PROVIDER_SUBSCRIPTION_MISSING_PERIOD,
+        );
       }
 
       const currentItems = currentSub.items.data.map((item: { price: { id: string } }) => ({
@@ -939,7 +946,7 @@ export function createStripeProvider(
     async handleWebhook(data) {
       const signature = data.headers["stripe-signature"];
       if (!signature) {
-        throw new Error("Missing Stripe signature header.");
+        throw PayKitError.from("BAD_REQUEST", PAYKIT_ERROR_CODES.PROVIDER_SIGNATURE_MISSING);
       }
 
       const event = client.webhooks.constructEvent(data.body, signature, options.webhookSecret);

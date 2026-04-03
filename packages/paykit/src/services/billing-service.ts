@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
+import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
 import { generateId } from "../core/utils";
 import type { PayKitDatabase } from "../database";
 import {
@@ -334,7 +335,7 @@ export async function upsertInvoiceRecord(
       .returning();
     const row = rows[0];
     if (!row) {
-      throw new Error("Failed to update invoice.");
+      throw PayKitError.from("INTERNAL_SERVER_ERROR", PAYKIT_ERROR_CODES.INVOICE_UPSERT_FAILED);
     }
     return row;
   }
@@ -348,7 +349,7 @@ export async function upsertInvoiceRecord(
     .returning();
   const row = rows[0];
   if (!row) {
-    throw new Error("Failed to upsert invoice.");
+    throw PayKitError.from("INTERNAL_SERVER_ERROR", PAYKIT_ERROR_CODES.INVOICE_UPSERT_FAILED);
   }
   return row;
 }
@@ -394,7 +395,7 @@ export async function insertSubscriptionRecord(
 
   const row = rows[0];
   if (!row) {
-    throw new Error("Failed to create subscription.");
+    throw PayKitError.from("INTERNAL_SERVER_ERROR", PAYKIT_ERROR_CODES.SUBSCRIPTION_CREATE_FAILED);
   }
 
   if (input.planFeatures.length > 0) {
