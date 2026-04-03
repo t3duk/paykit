@@ -5,6 +5,7 @@ import type { StripeProviderConfig, StripeRuntime } from "../providers/provider"
 import { createStripeRuntime } from "../providers/stripe";
 import type { PayKitLogger, PayKitOptions } from "../types/options";
 import { normalizeSchema, type NormalizedSchema } from "../types/schema";
+import { PayKitError, PAYKIT_ERROR_CODES } from "./errors";
 import { createPayKitLogger } from "./logger";
 
 export interface PayKitContext {
@@ -18,11 +19,15 @@ export interface PayKitContext {
 
 export async function createContext(options: PayKitOptions): Promise<PayKitContext> {
   if (!options.provider) {
-    throw new Error("A provider is required");
+    throw PayKitError.from("BAD_REQUEST", PAYKIT_ERROR_CODES.PROVIDER_REQUIRED);
   }
 
   if (options.basePath && !options.basePath.startsWith("/")) {
-    throw new Error(`basePath must start with "/", received "${options.basePath}"`);
+    throw PayKitError.from(
+      "BAD_REQUEST",
+      PAYKIT_ERROR_CODES.BASEPATH_INVALID,
+      `basePath must start with "/", received "${options.basePath}"`,
+    );
   }
 
   const pool =

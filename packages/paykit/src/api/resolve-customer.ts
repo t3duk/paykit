@@ -1,6 +1,5 @@
-import { APIError } from "better-call";
-
 import type { PayKitContext } from "../core/context";
+import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
 import { syncCustomerWithDefaults } from "../services/customer-service";
 
 export async function resolveCustomer(
@@ -15,9 +14,7 @@ export async function resolveCustomer(
     const identity = await ctx.options.identify(request);
 
     if (explicitCustomerId && explicitCustomerId !== identity.customerId) {
-      throw new APIError("FORBIDDEN", {
-        message: "customerId does not match authenticated user",
-      });
+      throw PayKitError.from("FORBIDDEN", PAYKIT_ERROR_CODES.CUSTOMER_ID_MISMATCH);
     }
 
     await syncCustomerWithDefaults(ctx, {
@@ -32,9 +29,7 @@ export async function resolveCustomer(
   // HTTP request present but no identify configured — reject to prevent IDOR.
   // The explicitCustomerId comes from the request body and can't be trusted.
   if (request) {
-    throw new APIError("UNAUTHORIZED", {
-      message: "identify must be configured to use HTTP API routes",
-    });
+    throw PayKitError.from("UNAUTHORIZED", PAYKIT_ERROR_CODES.IDENTIFY_REQUIRED);
   }
 
   // Server-to-server: trust the explicit ID (no HTTP request)
@@ -42,7 +37,5 @@ export async function resolveCustomer(
     return explicitCustomerId;
   }
 
-  throw new APIError("UNAUTHORIZED", {
-    message: "No customerId provided and no identify configured",
-  });
+  throw PayKitError.from("UNAUTHORIZED", PAYKIT_ERROR_CODES.CUSTOMER_ID_REQUIRED);
 }

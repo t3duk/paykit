@@ -1,5 +1,6 @@
 import * as z from "zod";
 
+import { PayKitError, PAYKIT_ERROR_CODES } from "../../core/errors";
 import { createPayKitEndpoint } from "../call";
 import { resolveCustomer } from "../resolve-customer";
 
@@ -9,7 +10,9 @@ function resolveReturnUrl(request: Request | undefined, explicitReturnUrl?: stri
   }
 
   if (!request) {
-    throw new Error(
+    throw PayKitError.from(
+      "BAD_REQUEST",
+      PAYKIT_ERROR_CODES.SUCCESS_URL_REQUIRED,
       "A returnUrl is required when openCustomerPortal is called without a request context",
     );
   }
@@ -35,7 +38,7 @@ export const customerPortal = createPayKitEndpoint(
     });
 
     if (!providerCustomer) {
-      throw new Error("Customer not found in provider. Ensure the customer has been synced.");
+      throw PayKitError.from("NOT_FOUND", PAYKIT_ERROR_CODES.PROVIDER_CUSTOMER_NOT_FOUND);
     }
 
     const { url } = await ctx.context.stripe.createPortalSession({

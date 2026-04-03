@@ -1,7 +1,7 @@
 import { and, count, countDistinct, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { PayKitContext } from "../core/context";
-import { PayKitError } from "../core/errors";
+import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
 import type { PayKitDatabase } from "../database";
 import {
   customer,
@@ -56,7 +56,7 @@ export async function syncCustomer(
 
     const row = rows[0];
     if (!row) {
-      throw new Error("Failed to update customer.");
+      throw PayKitError.from("INTERNAL_SERVER_ERROR", PAYKIT_ERROR_CODES.CUSTOMER_UPDATE_FAILED);
     }
     return row;
   }
@@ -74,7 +74,7 @@ export async function syncCustomer(
 
   const row = rows[0];
   if (!row) {
-    throw new Error("Failed to create customer.");
+    throw PayKitError.from("INTERNAL_SERVER_ERROR", PAYKIT_ERROR_CODES.CUSTOMER_CREATE_FAILED);
   }
   return row;
 }
@@ -160,7 +160,7 @@ export async function getCustomerByIdOrThrow(
 ): Promise<Customer> {
   const existingCustomer = await getCustomerById(database, customerId);
   if (!existingCustomer) {
-    throw new PayKitError("CUSTOMER_NOT_FOUND");
+    throw PayKitError.from("NOT_FOUND", PAYKIT_ERROR_CODES.CUSTOMER_NOT_FOUND);
   }
 
   return existingCustomer;

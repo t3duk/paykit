@@ -5,10 +5,6 @@ import type {
 } from "../providers/provider";
 import type { NormalizedPlanFeature } from "./schema";
 
-// ---------------------------------------------------------------------------
-// Stripe action discriminated unions
-// ---------------------------------------------------------------------------
-
 export type StripeSubscriptionAction =
   | {
       type: "create";
@@ -61,19 +57,11 @@ export type StripeInvoiceAction =
     }
   | { type: "none" };
 
-// ---------------------------------------------------------------------------
-// Stripe billing plan — bag of actions to execute against Stripe
-// ---------------------------------------------------------------------------
-
 export interface StripeBillingPlan {
   subscriptionAction: StripeSubscriptionAction;
   checkoutAction: StripeCheckoutAction;
   invoiceAction: StripeInvoiceAction;
 }
-
-// ---------------------------------------------------------------------------
-// PayKit billing plan — declarative DB mutations
-// ---------------------------------------------------------------------------
 
 export interface SubscriptionInsert {
   customerId: string;
@@ -105,18 +93,10 @@ export interface PayKitBillingPlan {
   clearScheduledInGroup: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Combined billing plan
-// ---------------------------------------------------------------------------
-
 export interface BillingPlan {
   paykit: PayKitBillingPlan;
   stripe: StripeBillingPlan;
 }
-
-// ---------------------------------------------------------------------------
-// Stripe execution result (returned from direct path)
-// ---------------------------------------------------------------------------
 
 export interface StripeExecutionResult {
   subscription?: ProviderSubscription | null;
@@ -124,10 +104,6 @@ export interface StripeExecutionResult {
   requiredAction?: ProviderRequiredAction | null;
   paymentUrl: string | null;
 }
-
-// ---------------------------------------------------------------------------
-// Serialization helpers for metadata storage (Dates → ISO strings)
-// ---------------------------------------------------------------------------
 
 export function serializeBillingPlan(plan: BillingPlan): unknown {
   return JSON.parse(JSON.stringify(plan));

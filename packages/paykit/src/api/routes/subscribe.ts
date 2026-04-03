@@ -1,5 +1,6 @@
 import * as z from "zod";
 
+import { PayKitError, PAYKIT_ERROR_CODES } from "../../core/errors";
 import { subscribeToPlan } from "../../services/subscribe-service";
 import { createPayKitEndpoint } from "../call";
 import { resolveCustomer } from "../resolve-customer";
@@ -10,7 +11,7 @@ function resolveSuccessUrl(request: Request | undefined, explicitSuccessUrl?: st
   }
 
   if (!request) {
-    throw new Error("A successUrl is required when subscribe is called without a request context");
+    throw PayKitError.from("BAD_REQUEST", PAYKIT_ERROR_CODES.SUCCESS_URL_REQUIRED);
   }
 
   return new URL("/", request.url).toString();

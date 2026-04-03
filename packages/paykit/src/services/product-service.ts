@@ -1,5 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 
+import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
 import { generateId } from "../core/utils";
 import type { PayKitDatabase } from "../database";
 import { feature, product, productFeature } from "../database/schema";
@@ -51,7 +52,11 @@ export async function upsertFeature(
 
   const row = rows[0];
   if (!row) {
-    throw new Error(`Failed to upsert feature "${input.id}".`);
+    throw PayKitError.from(
+      "INTERNAL_SERVER_ERROR",
+      PAYKIT_ERROR_CODES.FEATURE_UPSERT_FAILED,
+      `Failed to upsert feature "${input.id}"`,
+    );
   }
 
   return row;
