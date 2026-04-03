@@ -1,4 +1,4 @@
-import type { NormalizedPayment, NormalizedWebhookEvent } from "../types/events";
+import type { NormalizedWebhookEvent } from "../types/events";
 
 export interface ProviderPaymentMethod {
   providerMethodId: string;
@@ -108,14 +108,6 @@ export interface StripeRuntime {
   }): Promise<ProviderSubscriptionResult>;
 
   detachPaymentMethod(data: { providerMethodId: string }): Promise<void>;
-
-  charge(data: {
-    amount: number;
-    description: string;
-    metadata?: Record<string, string>;
-    providerCustomerId: string;
-    providerMethodId: string;
-  }): Promise<NormalizedPayment>;
 
   syncProduct(data: {
     id: string;

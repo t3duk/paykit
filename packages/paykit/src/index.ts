@@ -48,7 +48,6 @@ export type {
   NormalizedWebhookEvent,
   NormalizedWebhookEventMap,
   NormalizedWebhookEventName,
-  PayKitEventError,
   PayKitEventHandlers,
   PayKitEventMap,
   PayKitEventName,

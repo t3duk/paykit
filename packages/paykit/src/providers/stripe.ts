@@ -1,7 +1,7 @@
 import StripeSdk from "stripe";
 
 import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
-import type { NormalizedWebhookEvent, PayKitEventError } from "../types/events";
+import type { NormalizedWebhookEvent } from "../types/events";
 import type { StripeProviderConfig, StripeRuntime } from "./provider";
 
 type StripeInvoiceWithExtras = StripeSdk.Invoice & {
@@ -12,9 +12,6 @@ type StripeInvoiceWithExtras = StripeSdk.Invoice & {
 type StripeSubscriptionWithExtras = StripeSdk.Subscription & {
   latest_invoice?: StripeInvoiceWithExtras | string | null;
 };
-
-const PAYKIT_SOURCE_METADATA_KEY = "paykit_source";
-const PAYKIT_PROVIDER_CUSTOMER_METADATA_KEY = "paykit_provider_customer_id";
 
 function toDate(value?: number | null): Date | null {
   return typeof value === "number" ? new Date(value * 1000) : null;
@@ -143,37 +140,6 @@ function normalizeRequiredAction(paymentIntent?: StripeSdk.PaymentIntent | null)
     clientSecret: paymentIntent.client_secret ?? undefined,
     paymentIntentId: paymentIntent.id,
     type: nextActionType,
-  };
-}
-
-function createChargeMetadata(data: {
-  metadata?: Record<string, string>;
-  providerCustomerId: string;
-}): Record<string, string> {
-  return {
-    [PAYKIT_PROVIDER_CUSTOMER_METADATA_KEY]: data.providerCustomerId,
-    [PAYKIT_SOURCE_METADATA_KEY]: "charge",
-    ...data.metadata,
-  };
-}
-
-function getProviderCustomerIdFromPaymentIntent(
-  paymentIntent: StripeSdk.PaymentIntent,
-): string | null {
-  return (
-    paymentIntent.metadata[PAYKIT_PROVIDER_CUSTOMER_METADATA_KEY] ??
-    getStripeCustomerId(paymentIntent.customer)
-  );
-}
-
-function isPayKitDirectChargeIntent(paymentIntent: StripeSdk.PaymentIntent): boolean {
-  return paymentIntent.metadata[PAYKIT_SOURCE_METADATA_KEY] === "charge";
-}
-
-function normalizeStripePaymentError(paymentIntent: StripeSdk.PaymentIntent): PayKitEventError {
-  return {
-    code: paymentIntent.last_payment_error?.code,
-    message: paymentIntent.last_payment_error?.message ?? "Payment failed",
   };
 }
 
@@ -515,81 +481,6 @@ function createDetachedPaymentMethodEvents(event: StripeSdk.Event): NormalizedWe
   ];
 }
 
-function createDirectChargeSucceededEvents(event: StripeSdk.Event): NormalizedWebhookEvent[] {
-  if (event.type !== "payment_intent.succeeded") {
-    return [];
-  }
-
-  const paymentIntent = event.data.object;
-  if (!isPayKitDirectChargeIntent(paymentIntent)) {
-    return [];
-  }
-
-  const providerCustomerId = getProviderCustomerIdFromPaymentIntent(paymentIntent);
-  if (!providerCustomerId) {
-    return [];
-  }
-
-  const normalizedPayment = normalizeStripePaymentIntent(paymentIntent);
-  return [
-    {
-      actions: [
-        {
-          data: {
-            payment: normalizedPayment,
-            providerCustomerId,
-          },
-          type: "payment.upsert",
-        },
-      ],
-      name: "payment.succeeded",
-      payload: {
-        payment: normalizedPayment,
-        providerCustomerId,
-        providerEventId: event.id,
-      },
-    },
-  ];
-}
-
-function createDirectChargeFailedEvents(event: StripeSdk.Event): NormalizedWebhookEvent[] {
-  if (event.type !== "payment_intent.payment_failed") {
-    return [];
-  }
-
-  const paymentIntent = event.data.object;
-  if (!isPayKitDirectChargeIntent(paymentIntent)) {
-    return [];
-  }
-
-  const providerCustomerId = getProviderCustomerIdFromPaymentIntent(paymentIntent);
-  if (!providerCustomerId) {
-    return [];
-  }
-
-  const normalizedPayment = normalizeStripePaymentIntent(paymentIntent);
-  return [
-    {
-      actions: [
-        {
-          data: {
-            payment: normalizedPayment,
-            providerCustomerId,
-          },
-          type: "payment.upsert",
-        },
-      ],
-      name: "payment.failed",
-      payload: {
-        error: normalizeStripePaymentError(paymentIntent),
-        payment: normalizedPayment,
-        providerCustomerId,
-        providerEventId: event.id,
-      },
-    },
-  ];
-}
-
 export function createStripeProvider(
   client: StripeSdk,
   options: StripeProviderConfig,
@@ -875,21 +766,6 @@ export function createStripeProvider(
       await client.paymentMethods.detach(data.providerMethodId);
     },
 
-    async charge(data) {
-      const paymentIntent = await client.paymentIntents.create({
-        amount: data.amount,
-        confirm: true,
-        currency,
-        customer: data.providerCustomerId,
-        description: data.description,
-        metadata: createChargeMetadata(data),
-        off_session: true,
-        payment_method: data.providerMethodId,
-      });
-
-      return normalizeStripePaymentIntent(paymentIntent);
-    },
-
     async syncProduct(data) {
       let providerProductId = data.existingProviderProductId;
       if (!providerProductId) {
@@ -954,8 +830,6 @@ export function createStripeProvider(
         ...(await createCheckoutCompletedEvents(client, event)),
         ...(await createSubscriptionEvents(client, event)),
         ...createInvoiceEvents(event),
-        ...createDirectChargeSucceededEvents(event),
-        ...createDirectChargeFailedEvents(event),
         ...createDetachedPaymentMethodEvents(event),
       ];
     },
