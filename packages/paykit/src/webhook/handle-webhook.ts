@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
 import type { PayKitContext } from "../core/context";
-import { getTraceId, runWithTrace } from "../core/trace";
+import { getTraceId } from "../core/logger";
 import { product } from "../database/schema";
 import {
   activateScheduledSubscription,
@@ -652,7 +652,7 @@ export async function handleWebhook(
   ctx: PayKitContext,
   input: HandleWebhookInput,
 ): Promise<{ received: true }> {
-  return runWithTrace("wh", async () => {
+  return ctx.logger.trace("wh", async () => {
     const startTime = Date.now();
     const events = await ctx.stripe.handleWebhook({
       body: input.body,

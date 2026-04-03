@@ -1,6 +1,5 @@
 import type { PayKitContext } from "../core/context";
 import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
-import { runWithTrace } from "../core/trace";
 import type { ProviderSubscription } from "../providers/provider";
 import type {
   BillingPlan,
@@ -68,7 +67,7 @@ export async function subscribeToPlan(
   ctx: PayKitContext,
   input: SubscribeInput,
 ): Promise<SubscribeResult> {
-  return runWithTrace("sub", async () => {
+  return ctx.logger.trace("sub", async () => {
     const startTime = Date.now();
     ctx.logger.info(`subscribe started: planId=${input.planId} customerId=${input.customerId}`);
 

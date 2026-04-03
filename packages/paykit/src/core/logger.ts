@@ -1,5 +1,17 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import type { PayKitLogger } from "../types/options";
-import { getTraceId } from "./trace";
+import { generateId } from "./utils";
+
+interface TraceContext {
+  traceId: string;
+}
+
+const storage = new AsyncLocalStorage<TraceContext>();
+
+export function getTraceId(): string | undefined {
+  return storage.getStore()?.traceId;
+}
 
 const defaultConsoleLogger: PayKitLogger = {
   debug: console.debug.bind(console),
@@ -8,7 +20,11 @@ const defaultConsoleLogger: PayKitLogger = {
   error: console.error.bind(console),
 };
 
-export function createPayKitLogger(userLogger?: PayKitLogger): PayKitLogger {
+export interface PayKitInternalLogger extends PayKitLogger {
+  trace: <T>(prefix: string, fn: () => T | Promise<T>) => T | Promise<T>;
+}
+
+export function createPayKitLogger(userLogger?: PayKitLogger): PayKitInternalLogger {
   const base = userLogger ?? defaultConsoleLogger;
 
   function prefix(): string {
@@ -28,6 +44,10 @@ export function createPayKitLogger(userLogger?: PayKitLogger): PayKitLogger {
     },
     error(message, ...args) {
       base.error(`${prefix()} ${message}`, ...args);
+    },
+    trace(tracePrefix, fn) {
+      const traceId = generateId(tracePrefix, 12);
+      return storage.run({ traceId }, fn);
     },
   };
 }
