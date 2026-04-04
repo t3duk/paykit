@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { getStripeAccountInfo } from "../../packages/paykit/src/cli/utils/format";
@@ -13,6 +14,10 @@ import {
   syncProducts,
 } from "../../packages/paykit/src/services/product-sync-service";
 import { createCliFixture, type CliTestFixture } from "./setup";
+
+function resolveDatabase(database: Pool | string): Pool {
+  return typeof database === "string" ? new Pool({ connectionString: database }) : database;
+}
 
 describe("paykitjs status", () => {
   let fixture: CliTestFixture;
@@ -35,22 +40,24 @@ describe("paykitjs status", () => {
 
   it("should detect config and report plan count", async () => {
     const config = await getPayKitConfig({ cwd: fixture.cwd });
+    const database = resolveDatabase(config.options.database);
     try {
       const planCount = config.options.plans ? Object.values(config.options.plans).length : 0;
       expect(planCount).toBe(2);
       expect(config.options.provider).toBeTruthy();
     } finally {
-      await config.options.database.end();
+      await database.end();
     }
   });
 
   it("should report pending migrations on fresh database", async () => {
     const config = await getPayKitConfig({ cwd: fixture.cwd });
+    const database = resolveDatabase(config.options.database);
     try {
-      const pending = await getPendingMigrationCount(config.options.database);
+      const pending = await getPendingMigrationCount(database);
       expect(pending).toBeGreaterThan(0);
     } finally {
-      await config.options.database.end();
+      await database.end();
     }
   });
 
@@ -64,53 +71,57 @@ describe("paykitjs status", () => {
 
   it("should report schema up to date after migration", async () => {
     const config = await getPayKitConfig({ cwd: fixture.cwd });
+    const database = resolveDatabase(config.options.database);
     try {
-      await migrateDatabase(config.options.database);
+      await migrateDatabase(database);
 
-      const pending = await getPendingMigrationCount(config.options.database);
+      const pending = await getPendingMigrationCount(database);
       expect(pending).toBe(0);
     } finally {
-      await config.options.database.end();
+      await database.end();
     }
   });
 
   it("should report products not synced before push", async () => {
     const config = await getPayKitConfig({ cwd: fixture.cwd });
+    const database = resolveDatabase(config.options.database);
     try {
-      const ctx = await createContext(config.options);
+      const ctx = await createContext({ ...config.options, database });
       const diffs = await dryRunSyncProducts(ctx);
 
       const hasChanges = diffs.some((d) => d.action !== "unchanged");
       expect(hasChanges).toBe(true);
       expect(diffs.length).toBe(2);
     } finally {
-      await config.options.database.end();
+      await database.end();
     }
   });
 
   it("should report all synced after push", async () => {
     const config = await getPayKitConfig({ cwd: fixture.cwd });
+    const database = resolveDatabase(config.options.database);
     try {
-      const ctx = await createContext(config.options);
+      const ctx = await createContext({ ...config.options, database });
       await syncProducts(ctx);
 
       const diffs = await dryRunSyncProducts(ctx);
       const allSynced = diffs.every((d) => d.action === "unchanged");
       expect(allSynced).toBe(true);
     } finally {
-      await config.options.database.end();
+      await database.end();
     }
   });
 
   it("should verify database connectivity", async () => {
     const config = await getPayKitConfig({ cwd: fixture.cwd });
+    const database = resolveDatabase(config.options.database);
     try {
-      const ctx = await createContext(config.options);
+      const ctx = await createContext({ ...config.options, database });
       const result = await ctx.database.execute(sql`SELECT 1 AS ok`);
       const row = result.rows[0] as { ok: number } | undefined;
       expect(row?.ok).toBe(1);
     } finally {
-      await config.options.database.end();
+      await database.end();
     }
   });
 });

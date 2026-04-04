@@ -1,4 +1,5 @@
 import { asc, desc, eq } from "drizzle-orm";
+import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { getPayKitConfig } from "../../packages/paykit/src/cli/utils/get-config";
@@ -13,6 +14,10 @@ import {
   syncProducts,
 } from "../../packages/paykit/src/services/product-sync-service";
 import { createCliFixture, type CliTestFixture } from "./setup";
+
+function resolveDatabase(database: Pool | string): Pool {
+  return typeof database === "string" ? new Pool({ connectionString: database }) : database;
+}
 
 describe("paykitjs push", () => {
   let fixture: CliTestFixture;
@@ -36,23 +41,25 @@ describe("paykitjs push", () => {
 
   it("should apply migrations on a fresh database", async () => {
     const config = await getPayKitConfig({ cwd: fixture.cwd });
+    const database = resolveDatabase(config.options.database);
     try {
-      const pending = await getPendingMigrationCount(config.options.database);
+      const pending = await getPendingMigrationCount(database);
       expect(pending).toBeGreaterThan(0);
 
-      await migrateDatabase(config.options.database);
+      await migrateDatabase(database);
 
-      const pendingAfter = await getPendingMigrationCount(config.options.database);
+      const pendingAfter = await getPendingMigrationCount(database);
       expect(pendingAfter).toBe(0);
     } finally {
-      await config.options.database.end();
+      await database.end();
     }
   });
 
   it("should sync plans to the database and Stripe", async () => {
     const config = await getPayKitConfig({ cwd: fixture.cwd });
+    const database = resolveDatabase(config.options.database);
     try {
-      const ctx = await createContext(config.options);
+      const ctx = await createContext({ ...config.options, database });
       const results = await syncProducts(ctx);
 
       // Should have synced 2 plans (free + pro)
@@ -85,26 +92,30 @@ describe("paykitjs push", () => {
         | { id: string; provider: Record<string, { productId: string }> }
         | undefined;
       expect(proProduct).toBeTruthy();
-      const stripeInfo = proProduct!.provider.stripe;
+      const stripeInfo = proProduct?.provider.stripe;
       expect(stripeInfo).toBeTruthy();
+      if (!stripeInfo) {
+        throw new Error("Missing Stripe product metadata for synced plan");
+      }
 
       const stripeProduct = await fixture.stripeClient.products.retrieve(stripeInfo.productId);
       expect(stripeProduct.active).toBe(true);
     } finally {
-      await config.options.database.end();
+      await database.end();
     }
   });
 
   it("should report nothing to do on second push", async () => {
     const config = await getPayKitConfig({ cwd: fixture.cwd });
+    const database = resolveDatabase(config.options.database);
     try {
-      const ctx = await createContext(config.options);
+      const ctx = await createContext({ ...config.options, database });
       const diffs = await dryRunSyncProducts(ctx);
 
       const hasChanges = diffs.some((d) => d.action !== "unchanged");
       expect(hasChanges).toBe(false);
     } finally {
-      await config.options.database.end();
+      await database.end();
     }
   });
 });

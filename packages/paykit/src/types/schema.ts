@@ -403,7 +403,7 @@ export function normalizeSchema(plans: PayKitPlansModule | undefined): Normalize
       name: exportedPlan.name ?? deriveNameFromId(exportedPlan.id),
       priceAmount: exportedPlan.price ? Math.round(exportedPlan.price.amount * 100) : null,
       priceInterval: exportedPlan.price?.interval ?? null,
-      trialDays: exportedPlan.trial?.days ?? null,
+      trialDays: null,
     });
   }
 

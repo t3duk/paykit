@@ -6,6 +6,36 @@ import { auth } from "@/server/auth";
 import { paykit, type PayKit } from "@/server/paykit";
 
 export const paykitRouter = createTRPCRouter({
+  createCustomer: publicProcedure.mutation(async ({ ctx }) => {
+    const session = await auth.api.getSession({ headers: ctx.headers });
+    if (!session) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Not authenticated",
+      });
+    }
+
+    return paykit.upsertCustomer({
+      email: session.user.email,
+      id: session.user.id,
+      name: session.user.name ?? undefined,
+    });
+  }),
+
+  deleteCustomer: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const session = await auth.api.getSession({ headers: ctx.headers });
+      if (!session) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Not authenticated",
+        });
+      }
+
+      return paykit.deleteCustomer({ id: input.id });
+    }),
+
   currentPlans: publicProcedure.query(async ({ ctx }) => {
     const session = await auth.api.getSession({ headers: ctx.headers });
     if (!session) {

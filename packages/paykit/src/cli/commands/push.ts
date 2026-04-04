@@ -2,6 +2,7 @@ import path from "node:path";
 
 import * as p from "@clack/prompts";
 import { Command } from "commander";
+import { Pool } from "pg";
 import picocolors from "picocolors";
 
 import { createContext } from "../../core/context";
@@ -22,9 +23,13 @@ async function pushAction(options: { config?: string; cwd: string; yes?: boolean
   p.intro("paykit push");
 
   const config = await getPayKitConfig({ configPath: options.config, cwd });
+  const database =
+    typeof config.options.database === "string"
+      ? new Pool({ connectionString: config.options.database })
+      : config.options.database;
 
   try {
-    const connStr = getConnectionString(config.options.database as never);
+    const connStr = getConnectionString(database as never);
     const stripeAccount = await getStripeAccountInfo(config.options.provider.secretKey);
 
     p.log.info(
@@ -34,10 +39,10 @@ async function pushAction(options: { config?: string; cwd: string; yes?: boolean
     );
 
     // 1. Apply pending migrations first — schema must exist before querying products
-    const pendingMigrations = await getPendingMigrationCount(config.options.database);
+    const pendingMigrations = await getPendingMigrationCount(database);
 
     if (pendingMigrations > 0) {
-      await migrateDatabase(config.options.database);
+      await migrateDatabase(database);
       p.log.success(`Schema ${picocolors.dim("·")} migrated`);
     } else {
       p.log.step(`Schema ${picocolors.dim("·")} up to date`);
@@ -96,7 +101,7 @@ async function pushAction(options: { config?: string; cwd: string; yes?: boolean
     p.cancel("Push failed");
     process.exit(1);
   } finally {
-    await config.options.database.end();
+    await database.end();
   }
 }
 

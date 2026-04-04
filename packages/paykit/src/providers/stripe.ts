@@ -344,10 +344,7 @@ async function createCheckoutCompletedEvents(
   return events;
 }
 
-async function createSubscriptionEvents(
-  client: StripeSdk,
-  event: StripeSdk.Event,
-): Promise<NormalizedWebhookEvent[]> {
+async function createSubscriptionEvents(event: StripeSdk.Event): Promise<NormalizedWebhookEvent[]> {
   if (
     event.type !== "customer.subscription.created" &&
     event.type !== "customer.subscription.updated" &&
@@ -531,11 +528,6 @@ export function createStripeProvider(
         mode: "subscription",
         success_url: data.successUrl,
       };
-      if (data.trialPeriodDays && data.trialPeriodDays > 0) {
-        sessionParams.subscription_data = {
-          trial_period_days: data.trialPeriodDays,
-        };
-      }
       const session = await client.checkout.sessions.create(sessionParams);
 
       if (!session.url) {
@@ -555,9 +547,6 @@ export function createStripeProvider(
         payment_behavior: "default_incomplete",
         expand: ["latest_invoice.payment_intent"],
       };
-      if (data.trialPeriodDays && data.trialPeriodDays > 0) {
-        createParams.trial_period_days = data.trialPeriodDays;
-      }
       const createdSubscription = (await client.subscriptions.create(
         createParams,
       )) as StripeSubscriptionWithExtras;
@@ -828,7 +817,7 @@ export function createStripeProvider(
       const event = client.webhooks.constructEvent(data.body, signature, options.webhookSecret);
       return [
         ...(await createCheckoutCompletedEvents(client, event)),
-        ...(await createSubscriptionEvents(client, event)),
+        ...(await createSubscriptionEvents(event)),
         ...createInvoiceEvents(event),
         ...createDetachedPaymentMethodEvents(event),
       ];

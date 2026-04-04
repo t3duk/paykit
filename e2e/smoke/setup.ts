@@ -141,9 +141,6 @@ export async function createTestPayKit(): Promise<TestPayKit> {
       items: [{ price: data.providerPriceId }],
       payment_behavior: "allow_incomplete",
       expand: ["latest_invoice"],
-      ...(data.trialPeriodDays && data.trialPeriodDays > 0
-        ? { trial_period_days: data.trialPeriodDays }
-        : {}),
     });
 
     const firstItem = sub.items.data[0];

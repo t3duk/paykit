@@ -1,6 +1,7 @@
 import * as z from "zod";
 
 import { PayKitError, PAYKIT_ERROR_CODES } from "../../core/errors";
+import { getProviderCustomerIdForCustomer } from "../../services/customer-service";
 import { createPayKitEndpoint } from "../call";
 import { resolveCustomer } from "../resolve-customer";
 
@@ -32,17 +33,17 @@ export const customerPortal = createPayKitEndpoint(
   async (ctx) => {
     const customerId = await resolveCustomer(ctx.context, ctx.request, ctx.body.customerId);
 
-    const providerCustomer = await ctx.context.database.query.providerCustomer.findFirst({
-      where: (fields, { and, eq }) =>
-        and(eq(fields.customerId, customerId), eq(fields.providerId, ctx.context.provider.id)),
+    const providerCustomerId = await getProviderCustomerIdForCustomer(ctx.context.database, {
+      customerId,
+      providerId: ctx.context.provider.id,
     });
 
-    if (!providerCustomer) {
+    if (!providerCustomerId) {
       throw PayKitError.from("NOT_FOUND", PAYKIT_ERROR_CODES.PROVIDER_CUSTOMER_NOT_FOUND);
     }
 
     const { url } = await ctx.context.stripe.createPortalSession({
-      providerCustomerId: providerCustomer.providerCustomerId,
+      providerCustomerId,
       returnUrl: resolveReturnUrl(ctx.request, ctx.body.returnUrl),
     });
 
