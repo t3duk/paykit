@@ -11,7 +11,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit && tsc --build tsconfig.plugin.json"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",

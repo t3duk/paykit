@@ -52,6 +52,7 @@
   },
   "scripts": {
     "build": "tsdown --config tsdown.config.ts",
+    "typecheck": "tsc --build",
     "db:generate": "drizzle-kit generate --config src/database/drizzle.config.ts"
   },
   "dependencies": {
