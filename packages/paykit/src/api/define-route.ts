@@ -1,5 +1,6 @@
 import { createEndpoint, createMiddleware } from "better-call";
 import type { EndpointContext } from "better-call";
+import * as z from "zod";
 
 import type { PayKitContext } from "../core/context";
 import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
@@ -61,6 +62,10 @@ export interface PayKitMethodConfig {
 
 type InferSchemaInput<TSchema> = TSchema extends { _output: infer TOutput } ? TOutput : never;
 
+const returnUrlBrand = Symbol.for("paykit.return_url");
+
+type ReturnUrlSchema = z.ZodString & { [returnUrlBrand]: true };
+
 type InferMethodInput<TConfig extends PayKitMethodConfig> = TConfig["input"] extends undefined
   ? TConfig["route"] extends { resolveInput: (...args: unknown[]) => infer TResolved }
     ? Awaited<TResolved>
@@ -72,14 +77,33 @@ type InferRequireCustomer<TConfig extends PayKitMethodConfig> =
 
 type ServerMethodInput<TConfig extends PayKitMethodConfig> =
   InferRequireCustomer<TConfig> extends true
-    ? AddCustomerId<InferMethodInput<TConfig>>
-    : InferMethodInput<TConfig>;
+    ? AddCustomerId<RequireServerReturnUrlFields<InferMethodInput<TConfig>, TConfig["input"]>>
+    : RequireServerReturnUrlFields<InferMethodInput<TConfig>, TConfig["input"]>;
 
 type AddCustomerId<TInput> = TInput extends undefined
   ? { customerId?: string } | undefined
   : TInput extends object
     ? TInput & { customerId?: string }
     : TInput;
+
+type UnwrapReturnUrlSchema<TSchema> =
+  TSchema extends z.ZodOptional<infer TInner> ? UnwrapReturnUrlSchema<TInner> : TSchema;
+
+type ReturnUrlKeys<TSchema> =
+  TSchema extends z.ZodObject<infer TShape, any>
+    ? {
+        [K in keyof TShape]-?: UnwrapReturnUrlSchema<TShape[K]> extends ReturnUrlSchema ? K : never;
+      }[keyof TShape]
+    : never;
+
+type ServerRequiredReturnUrlKeys<TSchema> = Exclude<ReturnUrlKeys<TSchema>, "cancelUrl">;
+
+type RequireFields<TInput, TKeys extends keyof TInput> = Omit<TInput, TKeys> &
+  Required<Pick<TInput, TKeys>>;
+
+type RequireServerReturnUrlFields<TInput, TSchema> = TInput extends object
+  ? RequireFields<TInput, Extract<ServerRequiredReturnUrlKeys<TSchema>, keyof TInput>>
+  : TInput;
 
 type BetterCallEndpointContext = EndpointContext<
   string,
@@ -136,7 +160,12 @@ export function definePayKitMethod<const TConfig extends PayKitMethodConfig, TRe
     input: ServerMethodInput<TConfig>,
     request?: Request,
   ): Promise<TResult> => {
-    const normalizedInput = stripCustomerId(input) as InferMethodInput<TConfig>;
+    const normalizedInput = normalizeMethodInput(
+      config.input,
+      stripCustomerId(input),
+      request,
+      request?.headers,
+    ) as InferMethodInput<TConfig>;
     const customer = config.requireCustomer
       ? await resolveCustomer(
           paykit,
@@ -165,16 +194,21 @@ export function definePayKitMethod<const TConfig extends PayKitMethodConfig, TRe
     const endpoint = createPayKitEndpoint(
       config.route.path,
       {
-        body: config.input,
+        body: createRouteInputSchema(config.input),
         ...config.route,
         client: undefined,
         path: undefined,
         resolveInput: undefined,
       },
       async (ctx) => {
-        const routeInput = config.route?.resolveInput
-          ? await config.route.resolveInput(ctx as BetterCallEndpointContext)
-          : (ctx.body as InferMethodInput<TConfig>);
+        const routeInput = normalizeMethodInput(
+          config.input,
+          config.route?.resolveInput
+            ? await config.route.resolveInput(ctx as BetterCallEndpointContext)
+            : ctx.body,
+          ctx.request,
+          ctx.headers,
+        );
         const customer = config.requireCustomer
           ? await resolveCustomer(ctx.context, ctx.request)
           : undefined;
@@ -206,6 +240,10 @@ export function definePayKitMethod<const TConfig extends PayKitMethodConfig, TRe
   return call as PayKitMethod<ServerMethodInput<TConfig>, TResult>;
 }
 
+export function returnUrl(): ReturnUrlSchema {
+  return z.string().url().meta({ paykit: "returnUrl" }) as ReturnUrlSchema;
+}
+
 function getInputCustomerId(input: unknown): string | undefined {
   if (!input || typeof input !== "object") {
     return undefined;
@@ -223,6 +261,148 @@ function stripCustomerId<TInput>(input: TInput): TInput {
 
   const { customerId: _customerId, ...rest } = input;
   return rest as TInput;
+}
+
+function normalizeMethodInput(
+  schema: PayKitMethodConfig["input"],
+  input: unknown,
+  request?: Request,
+  headers?: Headers,
+): unknown {
+  if (!(schema instanceof z.ZodObject) || !input || typeof input !== "object") {
+    return input;
+  }
+
+  const fields = getReturnUrlFields(schema);
+  if (fields.length === 0) {
+    return input;
+  }
+
+  const normalized = { ...(input as Record<string, unknown>) };
+  for (const field of fields) {
+    const value = normalized[field];
+
+    if (typeof value === "string") {
+      normalized[field] = normalizeReturnUrlValue(field, value, request, headers);
+      continue;
+    }
+
+    if (value == null && shouldDefaultReturnUrlField(field)) {
+      normalized[field] = resolveAbsoluteUrl("/", request, headers, field);
+    }
+  }
+
+  return normalized;
+}
+
+function createRouteInputSchema(schema: PayKitMethodConfig["input"]) {
+  if (!(schema instanceof z.ZodObject)) {
+    return schema;
+  }
+
+  const shape = schema.shape;
+  const overrides: Record<string, z.ZodTypeAny> = {};
+
+  for (const [key, fieldSchema] of Object.entries(shape)) {
+    if (!isReturnUrlSchema(fieldSchema)) {
+      continue;
+    }
+
+    overrides[key] = createRoutedReturnUrlSchema(fieldSchema);
+  }
+
+  return Object.keys(overrides).length > 0 ? schema.extend(overrides) : schema;
+}
+
+function createRoutedReturnUrlSchema(schema: z.ZodTypeAny): z.ZodTypeAny {
+  if (schema instanceof z.ZodOptional) {
+    return createRoutedReturnUrlSchema(schema.unwrap()).optional();
+  }
+
+  return z.string().refine((value) => isAbsoluteUrl(value) || isAbsolutePath(value), {
+    message: "Invalid URL",
+  });
+}
+
+function getReturnUrlFields(schema: z.ZodObject<any>): string[] {
+  return Object.entries(schema.shape)
+    .filter(([, fieldSchema]) => isReturnUrlSchema(fieldSchema))
+    .map(([field]) => field);
+}
+
+function isReturnUrlSchema(schema: z.ZodTypeAny): boolean {
+  if (schema instanceof z.ZodOptional) {
+    return isReturnUrlSchema(schema.unwrap());
+  }
+
+  return schema.meta?.()?.paykit === "returnUrl";
+}
+
+function normalizeReturnUrlValue(
+  field: string,
+  value: string,
+  request?: Request,
+  headers?: Headers,
+): string {
+  if (isAbsolutePath(value)) {
+    return resolveAbsoluteUrl(value, request, headers, field);
+  }
+
+  return value;
+}
+
+function shouldDefaultReturnUrlField(field: string): boolean {
+  return field !== "cancelUrl";
+}
+
+function resolveAbsoluteUrl(
+  value: string,
+  request: Request | undefined,
+  headers: Headers | undefined,
+  field: string,
+): string {
+  const origin = resolveOrigin(request, headers);
+  if (!origin) {
+    throw PayKitError.from(
+      "BAD_REQUEST",
+      PAYKIT_ERROR_CODES.SUCCESS_URL_REQUIRED,
+      `A ${field} is required when this method is called without a request context`,
+    );
+  }
+
+  return new URL(value, origin).toString();
+}
+
+function resolveOrigin(request?: Request, headers?: Headers): string | null {
+  if (request?.url) {
+    return new URL("/", request.url).toString();
+  }
+
+  const explicitOrigin = headers?.get("origin");
+  if (explicitOrigin && isAbsoluteUrl(explicitOrigin)) {
+    return explicitOrigin.endsWith("/") ? explicitOrigin : `${explicitOrigin}/`;
+  }
+
+  const host = headers?.get("x-forwarded-host") ?? headers?.get("host");
+  if (!host) {
+    return null;
+  }
+
+  const protocol = headers?.get("x-forwarded-proto") ?? "https";
+  return `${protocol}://${host}/`;
+}
+
+function isAbsoluteUrl(value: string): boolean {
+  try {
+    void new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isAbsolutePath(value: string): boolean {
+  return /^\/(?!\/)/u.test(value);
 }
 
 async function resolveCustomer(
