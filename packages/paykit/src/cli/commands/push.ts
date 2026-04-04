@@ -7,7 +7,7 @@ import picocolors from "picocolors";
 
 import { createContext } from "../../core/context";
 import { getPendingMigrationCount, migrateDatabase } from "../../database/index";
-import { dryRunSyncProducts, syncProducts } from "../../services/product-sync-service";
+import { dryRunSyncProducts, syncProducts } from "../../product/product-sync.service";
 import {
   formatPlanLine,
   formatPrice,

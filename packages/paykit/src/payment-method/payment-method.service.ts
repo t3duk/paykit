@@ -1,10 +1,10 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { generateId } from "../core/utils";
+import { findCustomerByProviderCustomerId } from "../customer/customer.service";
 import type { PayKitDatabase } from "../database";
 import { paymentMethod } from "../database/schema";
 import type { NormalizedPaymentMethod } from "../types/events";
-import { findCustomerByProviderCustomerId } from "./customer-service";
 
 export async function getDefaultPaymentMethod(
   database: PayKitDatabase,

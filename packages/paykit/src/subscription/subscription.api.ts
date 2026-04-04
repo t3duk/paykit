@@ -1,8 +1,8 @@
-import { PayKitError, PAYKIT_ERROR_CODES } from "../../core/errors";
-import { createPayKitEndpoint } from "../call";
-import { resolveCustomer } from "../resolve-customer";
-import { subscribeToPlan } from "./subscribe.service";
-import { subscribeBodySchema } from "./subscribe.types";
+import { createPayKitEndpoint } from "../api/call";
+import { resolveCustomer } from "../api/resolve-customer";
+import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
+import { subscribeToPlan } from "./subscription.service";
+import { subscribeBodySchema } from "./subscription.types";
 
 function resolveSuccessUrl(request: Request | undefined, explicitSuccessUrl?: string): string {
   if (explicitSuccessUrl) {

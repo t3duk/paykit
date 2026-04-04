@@ -1,41 +1,38 @@
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
-import {
-  finalizeCheckoutSubscription,
-  loadSubscribeContext,
-} from "../api/subscribe/subscribe.service";
 import type { PayKitContext } from "../core/context";
 import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
 import { getTraceId } from "../core/logger";
-import { product } from "../database/schema";
+import { generateId } from "../core/utils";
+import {
+  deleteCustomerFromDatabase,
+  findCustomerByProviderCustomerId,
+  syncCustomer,
+} from "../customer/customer.service";
+import { product, webhookEvent } from "../database/schema";
+import { upsertInvoiceRecord } from "../invoice/invoice.service";
+import {
+  deletePaymentMethodByProviderId,
+  syncPaymentMethodByProviderCustomer,
+} from "../payment-method/payment-method.service";
+import { syncPaymentByProviderCustomer } from "../payment/payment.service";
+import { getDefaultProductInGroup, getProductByProviderPriceId } from "../product/product.service";
 import {
   activateScheduledSubscription,
-  beginWebhookEvent,
   deleteScheduledSubscriptionsInGroup,
   endSubscriptions,
-  finishWebhookEvent,
+  finalizeCheckoutSubscription,
   getActiveSubscriptionInGroup,
   getCurrentSubscriptions,
   getScheduledSubscriptionsInGroup,
   getSubscriptionByProviderSubscriptionId,
   insertSubscriptionRecord,
+  loadSubscribeContext,
   replaceSubscriptionSchedule,
   scheduleSubscriptionCancellation,
   syncSubscriptionBillingState,
   syncSubscriptionFromProvider,
-  upsertInvoiceRecord,
-} from "../services/billing-service";
-import {
-  deleteCustomerFromDatabase,
-  findCustomerByProviderCustomerId,
-  syncCustomer,
-} from "../services/customer-service";
-import {
-  deletePaymentMethodByProviderId,
-  syncPaymentMethodByProviderCustomer,
-} from "../services/payment-method-service";
-import { syncPaymentByProviderCustomer } from "../services/payment-service";
-import { getDefaultProductInGroup, getProductByProviderPriceId } from "../services/product-service";
+} from "../subscription/subscription.service";
 import type {
   AnyNormalizedWebhookEvent,
   NormalizedWebhookEvent,
@@ -45,6 +42,73 @@ import type {
 export interface HandleWebhookInput {
   body: string;
   headers: Record<string, string>;
+}
+
+async function beginWebhookEvent(
+  ctx: PayKitContext,
+  input: {
+    payload: Record<string, unknown>;
+    providerEventId: string;
+    type: string;
+  },
+): Promise<boolean> {
+  try {
+    await ctx.database.insert(webhookEvent).values({
+      error: null,
+      id: generateId("evt"),
+      payload: input.payload,
+      processedAt: null,
+      providerEventId: input.providerEventId,
+      providerId: ctx.provider.id,
+      receivedAt: new Date(),
+      status: "processing",
+      traceId: getTraceId(),
+      type: input.type,
+    });
+    return true;
+  } catch (error: unknown) {
+    const code = (error as { code?: string }).code;
+    if (code !== "23505") {
+      throw error;
+    }
+
+    const retried = await ctx.database
+      .update(webhookEvent)
+      .set({ error: null, processedAt: null, status: "processing" })
+      .where(
+        and(
+          eq(webhookEvent.providerId, ctx.provider.id),
+          eq(webhookEvent.providerEventId, input.providerEventId),
+          sql`(${webhookEvent.status} = 'failed' OR (${webhookEvent.status} = 'processing' AND ${webhookEvent.receivedAt} < now() - interval '5 minutes'))`,
+        ),
+      )
+      .returning({ id: webhookEvent.id });
+
+    return retried.length > 0;
+  }
+}
+
+async function finishWebhookEvent(
+  ctx: PayKitContext,
+  input: {
+    error?: string;
+    providerEventId: string;
+    status: "failed" | "processed";
+  },
+): Promise<void> {
+  await ctx.database
+    .update(webhookEvent)
+    .set({
+      error: input.error ?? null,
+      processedAt: new Date(),
+      status: input.status,
+    })
+    .where(
+      and(
+        eq(webhookEvent.providerId, ctx.provider.id),
+        eq(webhookEvent.providerEventId, input.providerEventId),
+      ),
+    );
 }
 
 async function emitCustomerUpdated(ctx: PayKitContext, customerId: string): Promise<void> {
@@ -564,18 +628,14 @@ export async function handleWebhook(
       }
     }
 
-    const traceId = getTraceId();
-
     for (const [index, event] of events.entries()) {
       const providerEventId = getProviderEventId(event, index, parentEventId);
 
       ctx.logger.info({ event: event.name, providerEventId }, "webhook received");
 
-      const shouldProcess = await beginWebhookEvent(ctx.database, {
+      const shouldProcess = await beginWebhookEvent(ctx, {
         payload: event.payload as Record<string, unknown>,
         providerEventId,
-        providerId: ctx.provider.id,
-        traceId,
         type: event.name,
       });
       if (!shouldProcess) {
@@ -618,9 +678,8 @@ export async function handleWebhook(
         const duration = Date.now() - startTime;
         ctx.logger.info({ event: event.name, duration }, "webhook processed");
 
-        await finishWebhookEvent(ctx.database, {
+        await finishWebhookEvent(ctx, {
           providerEventId,
-          providerId: ctx.provider.id,
           status: "processed",
         });
       } catch (error) {
@@ -628,10 +687,9 @@ export async function handleWebhook(
         const errorDetail = error instanceof Error ? (error.stack ?? error.message) : String(error);
         ctx.logger.error({ event: event.name, duration, err: error }, "webhook failed");
 
-        await finishWebhookEvent(ctx.database, {
+        await finishWebhookEvent(ctx, {
           error: errorDetail,
           providerEventId,
-          providerId: ctx.provider.id,
           status: "failed",
         });
         throw error;

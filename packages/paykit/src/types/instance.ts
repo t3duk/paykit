@@ -1,4 +1,11 @@
-import type { CheckResult, ReportResult } from "../services/entitlement-service";
+export type {
+  CustomerEntitlement,
+  CustomerSubscription,
+  CustomerWithDetails,
+  ListCustomersResult,
+} from "../customer/customer.types";
+import type { CustomerWithDetails, ListCustomersResult } from "../customer/customer.types";
+import type { CheckResult, ReportResult } from "../entitlement/entitlement.service";
 import type { Customer } from "./models";
 import type { PayKitOptions } from "./options";
 import type { FeatureIdFromPlans, PlanIdFromPlans } from "./schema";
@@ -37,36 +44,6 @@ export interface PayKitSubscribeResult {
     paymentIntentId?: string;
     type: string;
   } | null;
-}
-
-export interface CustomerSubscription {
-  planId: string;
-  status: string;
-  cancelAtPeriodEnd: boolean;
-  currentPeriodStart: Date | null;
-  currentPeriodEnd: Date | null;
-}
-
-export interface CustomerEntitlement {
-  featureId: string;
-  balance: number;
-  limit: number;
-  usage: number;
-  unlimited: boolean;
-  nextResetAt: Date | null;
-}
-
-export interface CustomerWithDetails extends Customer {
-  subscriptions: CustomerSubscription[];
-  entitlements: Record<string, CustomerEntitlement>;
-}
-
-export interface ListCustomersResult {
-  data: CustomerWithDetails[];
-  total: number;
-  hasMore: boolean;
-  limit: number;
-  offset: number;
 }
 
 type PayKitEndpoint<TPath extends string, TBody, TResult> = ((ctx: {

@@ -4,11 +4,11 @@ import {
   hardDeleteCustomer,
   listCustomers,
   syncCustomerWithDefaults,
-} from "../services/customer-service";
-import { checkEntitlement, reportEntitlement } from "../services/entitlement-service";
+} from "../customer/customer.service";
+import { checkEntitlement, reportEntitlement } from "../entitlement/entitlement.service";
 import type { PayKitAPI, PayKitInstance } from "../types/instance";
 import type { PayKitOptions } from "../types/options";
-import { handleWebhook } from "../webhook/handle-webhook";
+import { handleWebhook } from "../webhook/webhook.service";
 import { createContext, type PayKitContext } from "./context";
 
 const payKitInstanceSymbol = Symbol.for("paykit.instance");

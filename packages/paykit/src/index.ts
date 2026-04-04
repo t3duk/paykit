@@ -10,7 +10,11 @@ export type {
   PayKitSubscribeInput,
   PayKitSubscribeResult,
 } from "./types/instance";
-export type { CheckResult, EntitlementBalance, ReportResult } from "./services/entitlement-service";
+export type {
+  CheckResult,
+  EntitlementBalance,
+  ReportResult,
+} from "./entitlement/entitlement.service";
 export type {
   PayKitProvider,
   StripeProviderConfig,

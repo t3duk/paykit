@@ -1,30 +1,23 @@
-import type { PayKitContext } from "../../core/context";
-import { PayKitError, PAYKIT_ERROR_CODES } from "../../core/errors";
-import type { ProviderSubscription } from "../../providers/provider";
-import {
-  clearScheduledSubscriptionsInGroup,
-  deleteScheduledSubscriptionsInGroup,
-  endSubscriptions,
-  getActiveSubscriptionInGroup,
-  getScheduledSubscriptionsInGroup,
-  getSubscriptionByProviderSubscriptionId,
-  insertSubscriptionRecord,
-  replaceSubscriptionSchedule,
-  scheduleSubscriptionCancellation,
-  syncSubscriptionBillingState,
-  syncSubscriptionFromProvider,
-  upsertInvoiceRecord,
-} from "../../services/billing-service";
-import { upsertProviderCustomer } from "../../services/customer-service";
-import { getDefaultPaymentMethod } from "../../services/payment-method-service";
-import { getLatestProductWithPrice } from "../../services/product-service";
+import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+
+import type { PayKitContext } from "../core/context";
+import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
+import { generateId } from "../core/utils";
+import { upsertProviderCustomer } from "../customer/customer.service";
+import type { PayKitDatabase } from "../database";
+import { entitlement, product, subscription } from "../database/schema";
+import { upsertInvoiceRecord } from "../invoice/invoice.service";
+import { getDefaultPaymentMethod } from "../payment-method/payment-method.service";
+import { getLatestProductWithPrice } from "../product/product.service";
+import type { ProviderRequiredAction, ProviderSubscription } from "../providers/provider";
+import type { NormalizedSubscription } from "../types/events";
+import type { StoredSubscription } from "../types/models";
+import type { NormalizedPlanFeature } from "../types/schema";
 import type {
-  ProviderInvoicePayload,
-  SubscribeContext,
   SubscribeInput,
   SubscribeResult,
-  SubscribeResultInput,
-} from "./subscribe.types";
+  SubscriptionWithCatalog,
+} from "./subscription.types";
 
 /** Applies the requested plan change for a customer and returns the immediate subscribe result. */
 export async function subscribeToPlan(
@@ -64,10 +57,7 @@ export async function subscribeToPlan(
   });
 }
 
-export async function loadSubscribeContext(
-  ctx: PayKitContext,
-  input: SubscribeInput,
-): Promise<SubscribeContext> {
+export async function loadSubscribeContext(ctx: PayKitContext, input: SubscribeInput) {
   const providerId = ctx.provider.id;
   const normalizedPlan = ctx.plans.plans.find((plan) => plan.id === input.planId);
   const storedPlan = await getLatestProductWithPrice(ctx.database, {
@@ -139,9 +129,22 @@ export async function loadSubscribeContext(
   };
 }
 
-type ActiveSubscription = SubscribeContext["activeSubscription"];
+type SubscribeContext = Awaited<ReturnType<typeof loadSubscribeContext>>;
+type ActiveSubscription = Awaited<ReturnType<typeof getActiveSubscriptionInGroup>>;
 
-function buildSubscribeResult(input: SubscribeResultInput): SubscribeResult {
+function buildSubscribeResult(input: {
+  invoice?: {
+    currency: string;
+    hostedUrl?: string | null;
+    periodEndAt?: Date | null;
+    periodStartAt?: Date | null;
+    providerInvoiceId: string;
+    status: string | null;
+    totalAmount: number;
+  } | null;
+  paymentUrl: string | null;
+  requiredAction?: ProviderRequiredAction | null;
+}): SubscribeResult {
   return {
     invoice: input.invoice
       ? {
@@ -161,7 +164,7 @@ export async function finalizeCheckoutSubscription(
   ctx: PayKitContext,
   subCtx: SubscribeContext,
   input: {
-    invoice?: ProviderInvoicePayload | null;
+    invoice?: Parameters<typeof buildSubscribeResult>[0]["invoice"];
     subscription: ProviderSubscription;
   },
 ): Promise<void> {
@@ -623,7 +626,7 @@ async function upsertProviderBackedTargetSubscription(
   database: PayKitContext["database"],
   subCtx: SubscribeContext,
   input: {
-    invoice?: ProviderInvoicePayload | null;
+    invoice?: Parameters<typeof buildSubscribeResult>[0]["invoice"];
     subscription: ProviderSubscription;
   },
   options?: { deferred?: boolean },
@@ -702,4 +705,437 @@ async function deleteScheduledSubscriptionsInGroupIfNeeded(
     customerId: subCtx.customerId,
     group: subCtx.storedPlan.group,
   });
+}
+
+function addResetInterval(date: Date, resetInterval: string): Date {
+  const next = new Date(date);
+  if (resetInterval === "day") next.setUTCDate(next.getUTCDate() + 1);
+  if (resetInterval === "week") next.setUTCDate(next.getUTCDate() + 7);
+  if (resetInterval === "month") {
+    const day = next.getUTCDate();
+    next.setUTCMonth(next.getUTCMonth() + 1);
+    if (next.getUTCDate() !== day) next.setUTCDate(0);
+  }
+  if (resetInterval === "year") {
+    const day = next.getUTCDate();
+    next.setUTCFullYear(next.getUTCFullYear() + 1);
+    if (next.getUTCDate() !== day) next.setUTCDate(0);
+  }
+  return next;
+}
+
+type ProviderProductMap = Record<string, { productId: string; priceId: string | null }>;
+
+function mapJoinRowToSubscriptionWithCatalog(row: {
+  subscription: typeof subscription.$inferSelect;
+  product: typeof product.$inferSelect;
+}): SubscriptionWithCatalog {
+  const providerMap = row.product.provider as ProviderProductMap | null;
+  return {
+    ...row.subscription,
+    planGroup: row.product.group,
+    planId: row.product.id,
+    planIsDefault: row.product.isDefault,
+    planName: row.product.name,
+    priceAmount: row.product.priceAmount,
+    priceInterval: row.product.priceInterval,
+    providerPriceId: Object.values(providerMap ?? {})[0]?.priceId ?? null,
+  };
+}
+
+export async function getActiveSubscriptionInGroup(
+  database: PayKitDatabase,
+  input: { customerId: string; group: string },
+): Promise<SubscriptionWithCatalog | null> {
+  const rows = await database
+    .select()
+    .from(subscription)
+    .innerJoin(product, eq(subscription.productInternalId, product.internalId))
+    .where(
+      and(
+        eq(subscription.customerId, input.customerId),
+        eq(product.group, input.group),
+        inArray(subscription.status, ["active", "trialing", "past_due"]),
+        or(isNull(subscription.endedAt), sql`${subscription.endedAt} > now()`),
+      ),
+    )
+    .orderBy(desc(subscription.createdAt))
+    .limit(1);
+
+  const row = rows[0];
+  if (!row) return null;
+  return mapJoinRowToSubscriptionWithCatalog(row);
+}
+
+export async function getScheduledSubscriptionsInGroup(
+  database: PayKitDatabase,
+  input: { customerId: string; group: string },
+): Promise<readonly SubscriptionWithCatalog[]> {
+  const rows = await database
+    .select()
+    .from(subscription)
+    .innerJoin(product, eq(subscription.productInternalId, product.internalId))
+    .where(
+      and(
+        eq(subscription.customerId, input.customerId),
+        eq(product.group, input.group),
+        eq(subscription.status, "scheduled"),
+        isNull(subscription.endedAt),
+      ),
+    )
+    .orderBy(desc(subscription.createdAt));
+
+  return rows.map(mapJoinRowToSubscriptionWithCatalog);
+}
+
+export async function getSubscriptionByProviderSubscriptionId(
+  database: PayKitDatabase,
+  input: { providerId: string; providerSubscriptionId: string },
+): Promise<StoredSubscription | null> {
+  return (
+    (await database.query.subscription.findFirst({
+      orderBy: (s, { desc: d }) => [d(s.createdAt)],
+      where: and(
+        eq(subscription.providerId, input.providerId),
+        sql`${subscription.providerData}->>'subscriptionId' = ${input.providerSubscriptionId}`,
+      ),
+    })) ?? null
+  );
+}
+
+async function getSubscriptionById(
+  database: PayKitDatabase,
+  subscriptionId: string,
+): Promise<StoredSubscription | null> {
+  return (
+    (await database.query.subscription.findFirst({
+      where: eq(subscription.id, subscriptionId),
+    })) ?? null
+  );
+}
+
+export async function insertSubscriptionRecord(
+  database: PayKitDatabase,
+  input: {
+    customerId: string;
+    currentPeriodEndAt?: Date | null;
+    currentPeriodStartAt?: Date | null;
+    planFeatures: readonly NormalizedPlanFeature[];
+    productInternalId: string;
+    providerId?: string | null;
+    providerData?: Record<string, unknown> | null;
+    scheduledProductId?: string | null;
+    startedAt?: Date | null;
+    status: string;
+    trialEndsAt?: Date | null;
+  },
+): Promise<StoredSubscription> {
+  const now = new Date();
+  const rows = await database
+    .insert(subscription)
+    .values({
+      canceled: false,
+      cancelAtPeriodEnd: false,
+      canceledAt: null,
+      currentPeriodEndAt: input.currentPeriodEndAt ?? null,
+      currentPeriodStartAt: input.currentPeriodStartAt ?? null,
+      customerId: input.customerId,
+      endedAt: null,
+      id: generateId("sub"),
+      productInternalId: input.productInternalId,
+      providerData: input.providerData ?? null,
+      providerId: input.providerId ?? null,
+      quantity: 1,
+      scheduledProductId: input.scheduledProductId ?? null,
+      startedAt: input.startedAt ?? now,
+      status: input.status,
+      trialEndsAt: input.trialEndsAt ?? null,
+    })
+    .returning();
+
+  const row = rows[0];
+  if (!row) {
+    throw PayKitError.from("INTERNAL_SERVER_ERROR", PAYKIT_ERROR_CODES.SUBSCRIPTION_CREATE_FAILED);
+  }
+
+  if (input.planFeatures.length > 0) {
+    for (const planFeature of input.planFeatures) {
+      const isBoolean = planFeature.type === "boolean";
+      await database.insert(entitlement).values({
+        balance: isBoolean ? null : (planFeature.limit ?? 0),
+        customerId: input.customerId,
+        featureId: planFeature.id,
+        id: generateId("ent"),
+        limit: isBoolean ? null : (planFeature.limit ?? null),
+        nextResetAt: planFeature.resetInterval
+          ? addResetInterval(now, planFeature.resetInterval)
+          : null,
+        subscriptionId: row.id,
+      });
+    }
+  }
+
+  return row;
+}
+
+export async function endSubscriptions(
+  database: PayKitDatabase,
+  subscriptionIds: readonly string[],
+  input: { canceled?: boolean; canceledAt?: Date | null; endedAt?: Date | null; status: string },
+): Promise<void> {
+  if (subscriptionIds.length === 0) {
+    return;
+  }
+
+  await database
+    .update(subscription)
+    .set({
+      canceled: input.canceled ?? false,
+      canceledAt: input.canceledAt ?? (input.canceled ? new Date() : null),
+      endedAt: input.endedAt ?? new Date(),
+      status: input.status,
+      updatedAt: new Date(),
+    })
+    .where(inArray(subscription.id, [...subscriptionIds]));
+}
+
+export async function clearScheduledSubscriptionsInGroup(
+  database: PayKitDatabase,
+  input: { customerId: string; group: string },
+): Promise<void> {
+  const scheduled = await getScheduledSubscriptionsInGroup(database, input);
+  if (scheduled.length === 0) {
+    return;
+  }
+
+  await endSubscriptions(
+    database,
+    scheduled.map((item) => item.id),
+    { endedAt: new Date(), status: "canceled" },
+  );
+}
+
+async function deleteSubscriptions(
+  database: PayKitDatabase,
+  subscriptionIds: readonly string[],
+): Promise<void> {
+  if (subscriptionIds.length === 0) {
+    return;
+  }
+
+  await database
+    .delete(entitlement)
+    .where(inArray(entitlement.subscriptionId, [...subscriptionIds]));
+
+  await database.delete(subscription).where(inArray(subscription.id, [...subscriptionIds]));
+}
+
+export async function deleteScheduledSubscriptionsInGroup(
+  database: PayKitDatabase,
+  input: { customerId: string; group: string },
+): Promise<void> {
+  const scheduled = await getScheduledSubscriptionsInGroup(database, input);
+  if (scheduled.length === 0) {
+    return;
+  }
+
+  await deleteSubscriptions(
+    database,
+    scheduled.map((item) => item.id),
+  );
+}
+
+export async function scheduleSubscriptionCancellation(
+  database: PayKitDatabase,
+  input: {
+    canceledAt?: Date | null;
+    currentPeriodEndAt?: Date | null;
+    subscriptionId: string;
+  },
+): Promise<void> {
+  const existing = await getSubscriptionById(database, input.subscriptionId);
+  if (!existing) {
+    return;
+  }
+
+  await database
+    .update(subscription)
+    .set({
+      canceled: true,
+      canceledAt: input.canceledAt ?? new Date(),
+      endedAt: input.currentPeriodEndAt ?? existing.endedAt,
+      updatedAt: new Date(),
+    })
+    .where(eq(subscription.id, input.subscriptionId));
+}
+
+export async function replaceSubscriptionSchedule(
+  database: PayKitDatabase,
+  input: { subscriptionId: string; scheduledProductId?: string | null },
+): Promise<void> {
+  await database
+    .update(subscription)
+    .set({
+      scheduledProductId: input.scheduledProductId ?? null,
+      updatedAt: new Date(),
+    })
+    .where(eq(subscription.id, input.subscriptionId));
+}
+
+export async function activateScheduledSubscription(
+  database: PayKitDatabase,
+  input: {
+    currentPeriodEndAt?: Date | null;
+    currentPeriodStartAt?: Date | null;
+    subscriptionId: string;
+    startedAt?: Date | null;
+    status: string;
+    providerId?: string | null;
+    providerData?: Record<string, unknown> | null;
+  },
+): Promise<void> {
+  await database
+    .update(subscription)
+    .set({
+      canceled: false,
+      canceledAt: null,
+      currentPeriodEndAt: input.currentPeriodEndAt ?? null,
+      currentPeriodStartAt: input.currentPeriodStartAt ?? null,
+      endedAt: null,
+      providerData: input.providerData ?? null,
+      providerId: input.providerId,
+      startedAt: input.startedAt ?? new Date(),
+      status: input.status,
+      updatedAt: new Date(),
+    })
+    .where(eq(subscription.id, input.subscriptionId));
+}
+
+export async function getScheduledSubscriptionsReadyForActivation(
+  database: PayKitDatabase,
+  input: {
+    customerId: string;
+    group: string;
+    now: Date;
+  },
+): Promise<readonly SubscriptionWithCatalog[]> {
+  const rows = await database
+    .select()
+    .from(subscription)
+    .innerJoin(product, eq(subscription.productInternalId, product.internalId))
+    .where(
+      and(
+        eq(subscription.customerId, input.customerId),
+        eq(product.group, input.group),
+        eq(subscription.status, "scheduled"),
+        isNull(subscription.endedAt),
+        or(isNull(subscription.startedAt), lte(subscription.startedAt, input.now)),
+      ),
+    )
+    .orderBy(desc(subscription.createdAt));
+
+  return rows.map(mapJoinRowToSubscriptionWithCatalog);
+}
+
+export async function syncSubscriptionFromProvider(
+  database: PayKitDatabase,
+  input: {
+    subscriptionId: string;
+    providerSubscription: ProviderSubscription | NormalizedSubscription;
+  },
+): Promise<void> {
+  const endedAt =
+    input.providerSubscription.cancelAtPeriodEnd === false
+      ? null
+      : (input.providerSubscription.endedAt ?? null);
+  const canceledAt =
+    input.providerSubscription.cancelAtPeriodEnd === false
+      ? null
+      : (input.providerSubscription.canceledAt ?? null);
+
+  await database
+    .update(subscription)
+    .set({
+      canceled: input.providerSubscription.cancelAtPeriodEnd,
+      cancelAtPeriodEnd: input.providerSubscription.cancelAtPeriodEnd,
+      canceledAt,
+      currentPeriodEndAt: input.providerSubscription.currentPeriodEndAt ?? null,
+      currentPeriodStartAt: input.providerSubscription.currentPeriodStartAt ?? null,
+      endedAt,
+      status: input.providerSubscription.status,
+      updatedAt: new Date(),
+    })
+    .where(eq(subscription.id, input.subscriptionId));
+}
+
+export async function syncSubscriptionBillingState(
+  database: PayKitDatabase,
+  input: {
+    subscriptionId: string;
+    currentPeriodEndAt?: Date | null;
+    currentPeriodStartAt?: Date | null;
+    providerData?: Record<string, unknown> | null;
+    startedAt?: Date | null;
+    status?: string;
+  },
+): Promise<void> {
+  const existing = await database.query.subscription.findFirst({
+    where: eq(subscription.id, input.subscriptionId),
+  });
+  if (!existing) {
+    return;
+  }
+
+  await database
+    .update(subscription)
+    .set({
+      currentPeriodEndAt:
+        input.currentPeriodEndAt !== undefined
+          ? input.currentPeriodEndAt
+          : existing.currentPeriodEndAt,
+      currentPeriodStartAt:
+        input.currentPeriodStartAt !== undefined
+          ? input.currentPeriodStartAt
+          : existing.currentPeriodStartAt,
+      providerData: input.providerData !== undefined ? input.providerData : existing.providerData,
+      startedAt: input.startedAt !== undefined ? input.startedAt : existing.startedAt,
+      status: input.status ?? existing.status,
+      updatedAt: new Date(),
+    })
+    .where(eq(subscription.id, input.subscriptionId));
+}
+
+export async function getCurrentSubscriptions(
+  database: PayKitDatabase,
+  customerId: string,
+): Promise<
+  readonly {
+    currentPeriodEndAt: Date | null;
+    endedAt: Date | null;
+    id: string;
+    startedAt: Date | null;
+    status: string;
+  }[]
+> {
+  return database
+    .select({
+      currentPeriodEndAt: subscription.currentPeriodEndAt,
+      endedAt: subscription.endedAt,
+      id: product.id,
+      startedAt: subscription.startedAt,
+      status: subscription.status,
+    })
+    .from(subscription)
+    .innerJoin(product, eq(subscription.productInternalId, product.internalId))
+    .where(
+      and(
+        eq(subscription.customerId, customerId),
+        or(
+          isNull(subscription.endedAt),
+          sql`${subscription.endedAt} > now()`,
+          eq(subscription.status, "scheduled"),
+        ),
+      ),
+    )
+    .orderBy(desc(subscription.createdAt));
 }
