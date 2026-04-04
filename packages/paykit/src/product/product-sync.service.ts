@@ -10,7 +10,7 @@ import {
   updateProductName,
   upsertFeature,
   upsertProviderProduct,
-} from "./product-service";
+} from "./product.service";
 
 export interface SyncProductResult {
   id: string;

@@ -1,9 +1,9 @@
 import * as z from "zod";
 
-import { PayKitError, PAYKIT_ERROR_CODES } from "../../core/errors";
-import { getProviderCustomerIdForCustomer } from "../../services/customer-service";
-import { createPayKitEndpoint } from "../call";
-import { resolveCustomer } from "../resolve-customer";
+import { createPayKitEndpoint } from "../api/call";
+import { resolveCustomer } from "../api/resolve-customer";
+import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
+import { getProviderCustomerIdForCustomer } from "./customer.service";
 
 function resolveReturnUrl(request: Request | undefined, explicitReturnUrl?: string): string {
   if (explicitReturnUrl) {

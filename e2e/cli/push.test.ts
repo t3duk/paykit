@@ -12,7 +12,7 @@ import { product } from "../../packages/paykit/src/database/schema";
 import {
   dryRunSyncProducts,
   syncProducts,
-} from "../../packages/paykit/src/services/product-sync-service";
+} from "../../packages/paykit/src/product/product-sync.service";
 import { createCliFixture, type CliTestFixture } from "./setup";
 
 function resolveDatabase(database: Pool | string): Pool {

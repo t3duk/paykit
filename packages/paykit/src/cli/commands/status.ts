@@ -8,7 +8,7 @@ import StripeSdk from "stripe";
 
 import { createContext } from "../../core/context";
 import { getPendingMigrationCount } from "../../database/index";
-import { dryRunSyncProducts } from "../../services/product-sync-service";
+import { dryRunSyncProducts } from "../../product/product-sync.service";
 import {
   formatPlanLine,
   formatPrice,

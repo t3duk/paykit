@@ -1,6 +1,6 @@
 import type { PayKitContext } from "../core/context";
 import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
-import { syncCustomerWithDefaults } from "../services/customer-service";
+import { syncCustomerWithDefaults } from "../customer/customer.service";
 
 export async function resolveCustomer(
   ctx: PayKitContext,

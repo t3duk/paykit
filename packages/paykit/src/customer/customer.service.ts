@@ -11,30 +11,28 @@ import {
   product,
   subscription,
 } from "../database/schema";
+import { getLatestProductWithPrice } from "../product/product.service";
+import {
+  getActiveSubscriptionInGroup,
+  getScheduledSubscriptionsInGroup,
+  insertSubscriptionRecord,
+} from "../subscription/subscription.service";
+import type { Customer } from "../types/models";
 import type {
   CustomerEntitlement,
   CustomerSubscription,
   CustomerWithDetails,
   ListCustomersResult,
-} from "../types/instance";
-import type { Customer } from "../types/models";
-import {
-  getActiveSubscriptionInGroup,
-  getScheduledSubscriptionsInGroup,
-  insertSubscriptionRecord,
-} from "./billing-service";
-import { getLatestProductWithPrice } from "./product-service";
-
-export interface SyncCustomerInput {
-  id: string;
-  email?: string;
-  name?: string;
-  metadata?: Record<string, string>;
-}
+} from "./customer.types";
 
 export async function syncCustomer(
   database: PayKitDatabase,
-  input: SyncCustomerInput,
+  input: {
+    id: string;
+    email?: string;
+    name?: string;
+    metadata?: Record<string, string>;
+  },
 ): Promise<Customer> {
   const now = new Date();
   const existing = await database.query.customer.findFirst({
@@ -137,7 +135,7 @@ export async function ensureDefaultPlansForCustomer(
 
 export async function syncCustomerWithDefaults(
   ctx: PayKitContext,
-  input: SyncCustomerInput,
+  input: Parameters<typeof syncCustomer>[1],
 ): Promise<Customer> {
   const syncedCustomer = await syncCustomer(ctx.database, input);
   await ensureDefaultPlansForCustomer(ctx, syncedCustomer.id);

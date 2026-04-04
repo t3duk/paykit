@@ -1,10 +1,10 @@
 import { createRouter } from "better-call";
 
 import type { PayKitContext } from "../core/context";
+import { customerPortal } from "../customer/customer.api";
+import { subscribe } from "../subscription/subscription.api";
 import type { PayKitOptions } from "../types/options";
-import { customerPortal } from "./routes/customer-portal";
-import { webhook } from "./routes/webhook";
-import { subscribe } from "./subscribe/subscribe.api";
+import { webhook } from "../webhook/webhook.api";
 
 export const clientEndpoints = { subscribe, customerPortal } as const;
 export const endpoints = { ...clientEndpoints, webhook } as const;

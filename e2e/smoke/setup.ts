@@ -18,8 +18,8 @@ import {
   subscription,
   webhookEvent,
 } from "../../packages/paykit/src/database/schema";
-import { syncPaymentMethodByProviderCustomer } from "../../packages/paykit/src/services/payment-method-service";
-import { syncProducts } from "../../packages/paykit/src/services/product-sync-service";
+import { syncPaymentMethodByProviderCustomer } from "../../packages/paykit/src/payment-method/payment-method.service";
+import { syncProducts } from "../../packages/paykit/src/product/product-sync.service";
 
 config({ path: path.resolve(import.meta.dirname, "../../.env") });
 config({ path: path.resolve(import.meta.dirname, "../../.env.local"), override: true });

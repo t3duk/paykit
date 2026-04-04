@@ -1,10 +1,10 @@
 import { and, eq, sql } from "drizzle-orm";
 
 import { generateId } from "../core/utils";
+import { findCustomerByProviderCustomerId } from "../customer/customer.service";
 import type { PayKitDatabase } from "../database";
 import { invoice } from "../database/schema";
 import type { NormalizedPayment } from "../types/events";
-import { findCustomerByProviderCustomerId } from "./customer-service";
 
 export async function syncPaymentByProviderCustomer(
   database: PayKitDatabase,

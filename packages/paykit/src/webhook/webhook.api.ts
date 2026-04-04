@@ -1,5 +1,5 @@
-import { handleWebhook } from "../../webhook/handle-webhook";
-import { createPayKitEndpoint } from "../call";
+import { createPayKitEndpoint } from "../api/call";
+import { handleWebhook } from "./webhook.service";
 
 function headersToRecord(headers: Headers): Record<string, string> {
   const result: Record<string, string> = {};
