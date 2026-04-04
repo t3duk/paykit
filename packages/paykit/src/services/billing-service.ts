@@ -3,36 +3,13 @@ import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
 import { generateId } from "../core/utils";
 import type { PayKitDatabase } from "../database";
-import {
-  entitlement,
-  invoice,
-  metadata,
-  product,
-  subscription,
-  webhookEvent,
-} from "../database/schema";
-import type {
-  ProviderInvoice,
-  ProviderRequiredAction,
-  ProviderSubscription,
-} from "../providers/provider";
+import { entitlement, invoice, product, subscription, webhookEvent } from "../database/schema";
+import type { ProviderInvoice, ProviderSubscription } from "../providers/provider";
 import type { NormalizedInvoice, NormalizedSubscription } from "../types/events";
 import type { StoredInvoice, StoredSubscription } from "../types/models";
 import type { NormalizedPlanFeature } from "../types/schema";
 
-export interface SubscribeResult {
-  invoice?: {
-    currency: string;
-    hostedUrl: string | null;
-    providerInvoiceId: string;
-    status: string | null;
-    totalAmount: number;
-  };
-  paymentUrl: string | null;
-  requiredAction?: ProviderRequiredAction | null;
-}
-
-export interface SubscriptionWithCatalog extends StoredSubscription {
+interface SubscriptionWithCatalog extends StoredSubscription {
   planId: string;
   planGroup: string;
   planIsDefault: boolean;
@@ -57,18 +34,6 @@ function addResetInterval(date: Date, resetInterval: string): Date {
     if (next.getUTCDate() !== day) next.setUTCDate(0);
   }
   return next;
-}
-
-function normalizeInvoice(
-  source: ProviderInvoice | NormalizedInvoice,
-): SubscribeResult["invoice"] | undefined {
-  return {
-    currency: source.currency,
-    hostedUrl: source.hostedUrl ?? null,
-    providerInvoiceId: source.providerInvoiceId,
-    status: source.status,
-    totalAmount: source.totalAmount,
-  };
 }
 
 type ProviderProductMap = Record<string, { productId: string; priceId: string | null }>;
@@ -159,65 +124,6 @@ export async function getSubscriptionById(
       where: eq(subscription.id, subscriptionId),
     })) ?? null
   );
-}
-
-export async function createMetadata(
-  database: PayKitDatabase,
-  input: {
-    data: Record<string, unknown>;
-    expiresAt?: Date;
-    providerId: string;
-    type: string;
-  },
-): Promise<{ id: string }> {
-  const id = generateId("meta");
-  await database.insert(metadata).values({
-    data: input.data,
-    expiresAt: input.expiresAt ?? null,
-    id,
-    providerCheckoutSessionId: null,
-    providerId: input.providerId,
-    type: input.type,
-  });
-  return { id };
-}
-
-export async function linkMetadataToCheckoutSession(
-  database: PayKitDatabase,
-  input: { id: string; providerCheckoutSessionId: string },
-): Promise<void> {
-  await database
-    .update(metadata)
-    .set({ providerCheckoutSessionId: input.providerCheckoutSessionId })
-    .where(eq(metadata.id, input.id));
-}
-
-export async function getMetadataById(
-  database: PayKitDatabase,
-  id: string,
-): Promise<{
-  id: string;
-  providerId: string;
-  type: string;
-  data: Record<string, unknown>;
-  providerCheckoutSessionId: string | null;
-} | null> {
-  const row = await database.query.metadata.findFirst({
-    where: eq(metadata.id, id),
-  });
-  return row
-    ? {
-        data: row.data,
-        id: row.id,
-        providerCheckoutSessionId: row.providerCheckoutSessionId,
-        providerId: row.providerId,
-        type: row.type,
-      }
-    : null;
-}
-
-export async function deleteMetadataById(database: PayKitDatabase, id: string): Promise<void> {
-  await database.delete(metadata).where(eq(metadata.id, id));
 }
 
 export async function beginWebhookEvent(
@@ -678,16 +584,4 @@ export async function getCurrentSubscriptions(
       ),
     )
     .orderBy(desc(subscription.createdAt));
-}
-
-export function buildSubscribeResult(input: {
-  invoice?: ProviderInvoice | NormalizedInvoice | null;
-  paymentUrl: string | null;
-  requiredAction?: ProviderRequiredAction | null;
-}): SubscribeResult {
-  return {
-    invoice: input.invoice ? normalizeInvoice(input.invoice) : undefined,
-    paymentUrl: input.paymentUrl,
-    requiredAction: input.requiredAction ?? null,
-  };
 }

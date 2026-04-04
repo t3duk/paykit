@@ -66,13 +66,11 @@ export interface StripeRuntime {
     successUrl: string;
     cancelUrl?: string;
     metadata?: Record<string, string>;
-    trialPeriodDays?: number;
   }): Promise<{ paymentUrl: string; providerCheckoutSessionId: string }>;
 
   createSubscription(data: {
     providerCustomerId: string;
     providerPriceId: string;
-    trialPeriodDays?: number;
   }): Promise<ProviderSubscriptionResult>;
 
   updateSubscription(data: {

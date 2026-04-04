@@ -58,12 +58,12 @@ function getPlanAction(
   activePlan: CurrentPlan | null,
   scheduledPlan: CurrentPlan | null,
 ) {
-  if (scheduledPlan?.id === planId) {
+  if (scheduledPlan?.planId === planId) {
     return { disabled: true, label: "Scheduled" };
   }
 
-  if (activePlan?.id === planId) {
-    if (activePlan.canceled || scheduledPlan) {
+  if (activePlan?.planId === planId) {
+    if (activePlan.cancelAtPeriodEnd || scheduledPlan) {
       return { disabled: false, label: "Resubscribe" };
     }
     return { disabled: true, label: "Current plan" };
@@ -79,7 +79,8 @@ function getPlanAction(
     };
   }
 
-  const activeAmount = activePlan.amount ?? 0;
+  const activeCatalog = planCatalog.find((plan) => plan.id === activePlan.planId);
+  const activeAmount = activeCatalog?.priceAmount ?? 0;
   const targetAmount = target.priceAmount ?? 0;
 
   if (targetAmount > activeAmount) return { disabled: false, label: "Upgrade" };
@@ -156,21 +157,25 @@ export function SubscribePanel() {
           </div>
         ) : activePlan ? (
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <span className="text-lg font-semibold">{activePlan.name}</span>
+            <span className="text-lg font-semibold">
+              {planCatalog.find((plan) => plan.id === activePlan.planId)?.name ?? activePlan.planId}
+            </span>
             <Badge variant="secondary">{activePlan.status}</Badge>
             {scheduledPlan ? <Badge variant="outline">change pending</Badge> : null}
             <span className="text-muted-foreground text-sm">
-              {activePlan.currentPeriodEndAt
-                ? activePlan.canceled || scheduledPlan
-                  ? `Ends ${formatDate(activePlan.currentPeriodEndAt)}`
-                  : `Renews ${formatDate(activePlan.currentPeriodEndAt)}`
+              {activePlan.currentPeriodEnd
+                ? activePlan.cancelAtPeriodEnd || scheduledPlan
+                  ? `Ends ${formatDate(activePlan.currentPeriodEnd)}`
+                  : `Renews ${formatDate(activePlan.currentPeriodEnd)}`
                 : null}
             </span>
             {scheduledPlan ? (
               <span className="text-muted-foreground text-sm">
-                &rarr; {scheduledPlan.name}{" "}
-                {scheduledPlan.startedAt
-                  ? `on ${formatDate(scheduledPlan.startedAt)}`
+                &rarr;{" "}
+                {planCatalog.find((plan) => plan.id === scheduledPlan.planId)?.name ??
+                  scheduledPlan.planId}{" "}
+                {scheduledPlan.currentPeriodStart
+                  ? `on ${formatDate(scheduledPlan.currentPeriodStart)}`
                   : "at end of period"}
               </span>
             ) : null}
@@ -187,7 +192,7 @@ export function SubscribePanel() {
         <h2 className="text-sm font-medium">Choose a plan</h2>
         <div className="grid gap-3 sm:grid-cols-3">
           {planCatalog.map((plan) => {
-            const isCurrent = activePlan?.id === plan.id;
+            const isCurrent = activePlan?.planId === plan.id;
             const action = getPlanAction(plan.id, activePlan, scheduledPlan);
 
             return (

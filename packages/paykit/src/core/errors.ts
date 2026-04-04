@@ -25,8 +25,7 @@ export const PAYKIT_ERROR_CODES = defineErrorCodes({
   PROVIDER_SUBSCRIPTION_MISSING_ITEMS: "Provider subscription did not include any items",
   PROVIDER_SUBSCRIPTION_MISSING_PERIOD: "Provider subscription did not include period end",
   PROVIDER_PRICE_REQUIRED: "A provider price ID is required",
-
-  WEBHOOK_PROVIDER_MISMATCH: "Webhook provider does not match this PayKit instance",
+  PROVIDER_WEBHOOK_INVALID: "Provider webhook payload is invalid",
 
   IDENTIFY_REQUIRED: "identify must be configured to use HTTP API routes",
   CUSTOMER_ID_MISMATCH: "customerId does not match authenticated user",

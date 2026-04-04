@@ -1,20 +1,21 @@
 import { eq } from "drizzle-orm";
 
-import { executePayKitPlan, executeStripeAction } from "../api/subscribe/subscribe.service";
-import { deserializeBillingPlan } from "../api/subscribe/subscribe.types";
+import {
+  finalizeCheckoutSubscription,
+  loadSubscribeContext,
+} from "../api/subscribe/subscribe.service";
 import type { PayKitContext } from "../core/context";
+import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
 import { getTraceId } from "../core/logger";
 import { product } from "../database/schema";
 import {
   activateScheduledSubscription,
   beginWebhookEvent,
-  deleteMetadataById,
   deleteScheduledSubscriptionsInGroup,
   endSubscriptions,
   finishWebhookEvent,
   getActiveSubscriptionInGroup,
   getCurrentSubscriptions,
-  getMetadataById,
   getScheduledSubscriptionsInGroup,
   getSubscriptionByProviderSubscriptionId,
   insertSubscriptionRecord,
@@ -34,11 +35,7 @@ import {
   syncPaymentMethodByProviderCustomer,
 } from "../services/payment-method-service";
 import { syncPaymentByProviderCustomer } from "../services/payment-service";
-import {
-  getDefaultProductInGroup,
-  getLatestProductWithPrice,
-  getProductByProviderPriceId,
-} from "../services/product-service";
+import { getDefaultProductInGroup, getProductByProviderPriceId } from "../services/product-service";
 import type {
   AnyNormalizedWebhookEvent,
   NormalizedWebhookEvent,
@@ -201,151 +198,48 @@ async function finalizeSubscriptionCheckout(
     return null;
   }
 
-  const metadataId = event.payload.metadata?.paykit_metadata_id;
-  if (!metadataId) {
+  const intent = event.payload.metadata?.paykit_intent;
+  if (intent !== "subscribe") {
     return null;
   }
 
-  const storedMetadata = await getMetadataById(ctx.database, metadataId);
-  if (!storedMetadata) {
-    return null;
-  }
-
-  const metadataType =
-    typeof storedMetadata.data.type === "string" ? storedMetadata.data.type : null;
-
-  // --- New deferred billing plan path ---
-  if (metadataType === "subscribe_deferred") {
-    const billingPlan = deserializeBillingPlan(storedMetadata.data.billingPlan as unknown);
-    const checkoutSubscription = event.payload.subscription ?? null;
-    const checkoutInvoice = event.payload.invoice ?? null;
-
-    // Cancel the old subscription if this was a checkout upgrade (e.g. pro → ultra).
-    if (billingPlan.stripe.subscriptionAction.type !== "none") {
-      await executeStripeAction(ctx, billingPlan.stripe.subscriptionAction);
-    }
-
-    await executePayKitPlan(
-      ctx,
-      ctx.provider.id,
-      billingPlan.paykit,
-      {
-        invoice: checkoutInvoice,
-        subscription: checkoutSubscription,
-      },
-      { deferred: true },
-    );
-
-    await deleteMetadataById(ctx.database, metadataId);
-    return billingPlan.paykit.customerId;
-  }
-
-  // --- Legacy metadata path (backward compat for old subscribe_new / subscribe_upgrade) ---
-  return finalizeLegacyCheckout(ctx, event, storedMetadata);
-}
-
-async function finalizeLegacyCheckout(
-  ctx: PayKitContext,
-  event: NormalizedWebhookEvent<"checkout.completed">,
-  storedMetadata: { data: Record<string, unknown>; id: string },
-): Promise<string | null> {
-  const customerId =
-    typeof storedMetadata.data.customerId === "string"
-      ? storedMetadata.data.customerId
-      : event.payload.metadata?.paykit_customer_id;
-  const planId =
-    typeof storedMetadata.data.planId === "string"
-      ? storedMetadata.data.planId
-      : event.payload.metadata?.paykit_plan_id;
-
+  const customerId = event.payload.metadata?.paykit_customer_id;
+  const planId = event.payload.metadata?.paykit_plan_id;
   if (!customerId || !planId) {
-    return null;
+    throw PayKitError.from(
+      "BAD_REQUEST",
+      PAYKIT_ERROR_CODES.PROVIDER_WEBHOOK_INVALID,
+      "Subscribe checkout metadata is missing paykit_customer_id or paykit_plan_id",
+    );
   }
 
-  const storedPlan = await getLatestProductWithPrice(ctx.database, {
-    id: planId,
-    providerId: ctx.provider.id,
-  });
-  const normalizedPlan = ctx.plans.plans.find((plan) => plan.id === planId);
-  const existingSub = event.payload.providerSubscriptionId
-    ? await getSubscriptionByProviderSubscriptionId(ctx.database, {
-        providerId: ctx.provider.id,
-        providerSubscriptionId: event.payload.providerSubscriptionId,
-      })
-    : null;
   const checkoutSubscription = event.payload.subscription ?? null;
-  const checkoutInvoice = event.payload.invoice ?? null;
-
-  if (storedPlan && normalizedPlan) {
-    const currentPeriodStartAt =
-      checkoutSubscription?.currentPeriodStartAt ?? existingSub?.currentPeriodStartAt ?? null;
-    const currentPeriodEndAt =
-      checkoutSubscription?.currentPeriodEndAt ?? existingSub?.currentPeriodEndAt ?? null;
-    const currentGroupActiveSub = storedPlan.group
-      ? await getActiveSubscriptionInGroup(ctx.database, {
-          customerId,
-          group: storedPlan.group,
-        })
-      : null;
-
-    const providerData = checkoutSubscription
-      ? { subscriptionId: checkoutSubscription.providerSubscriptionId }
-      : (existingSub?.providerData ?? null);
-
-    // Use existing subscription or create a new one
-    const targetSub =
-      existingSub ??
-      (await insertSubscriptionRecord(ctx.database, {
-        currentPeriodEndAt,
-        currentPeriodStartAt,
-        customerId,
-        planFeatures: normalizedPlan.includes,
-        productInternalId: storedPlan.internalId,
-        providerId: ctx.provider.id,
-        providerData,
-        startedAt: currentPeriodStartAt ?? new Date(),
-        status: checkoutSubscription?.status ?? existingSub?.status ?? "active",
-      }));
-
-    if (
-      currentGroupActiveSub &&
-      currentGroupActiveSub.id !== targetSub.id &&
-      currentGroupActiveSub.productInternalId !== targetSub.productInternalId
-    ) {
-      await endSubscriptions(ctx.database, [currentGroupActiveSub.id], {
-        canceled: false,
-        endedAt: currentPeriodStartAt ?? new Date(),
-        status: "ended",
-      });
-    }
-
-    await syncSubscriptionBillingState(ctx.database, {
-      subscriptionId: targetSub.id,
-      currentPeriodEndAt,
-      currentPeriodStartAt,
-      providerData: providerData ?? targetSub.providerData,
-      startedAt: currentPeriodStartAt ?? targetSub.startedAt,
-      status: checkoutSubscription?.status ?? existingSub?.status ?? targetSub.status,
-    });
-
-    if (checkoutSubscription) {
-      await syncSubscriptionFromProvider(ctx.database, {
-        subscriptionId: targetSub.id,
-        providerSubscription: checkoutSubscription,
-      });
-    }
-
-    if (checkoutInvoice) {
-      await upsertInvoiceRecord(ctx.database, {
-        customerId,
-        invoice: checkoutInvoice,
-        providerId: ctx.provider.id,
-        subscriptionId: targetSub.id,
-      });
-    }
+  if (!checkoutSubscription) {
+    throw PayKitError.from(
+      "BAD_REQUEST",
+      PAYKIT_ERROR_CODES.PROVIDER_WEBHOOK_INVALID,
+      "Subscribe checkout completion is missing subscription data",
+    );
   }
 
-  await deleteMetadataById(ctx.database, storedMetadata.id);
+  const subCtx = await loadSubscribeContext(ctx, {
+    customerId,
+    planId,
+    successUrl: "https://paykit.invalid/checkout",
+  });
+  if (subCtx.storedPlan.providerPriceId !== checkoutSubscription.providerPriceId) {
+    throw PayKitError.from(
+      "BAD_REQUEST",
+      PAYKIT_ERROR_CODES.PROVIDER_WEBHOOK_INVALID,
+      `Checkout price mismatch for plan "${planId}"`,
+    );
+  }
+
+  await finalizeCheckoutSubscription(ctx, subCtx, {
+    invoice: event.payload.invoice ?? null,
+    subscription: checkoutSubscription,
+  });
+
   return customerId;
 }
 
@@ -437,7 +331,6 @@ async function applyAction(ctx: PayKitContext, action: WebhookApplyAction): Prom
             providerData,
             startedAt: action.data.subscription.currentPeriodStartAt ?? new Date(),
             status: action.data.subscription.status,
-            trialEndsAt: null,
           })
         : null);
 

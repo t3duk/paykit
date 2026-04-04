@@ -2,19 +2,14 @@ import type { PayKitContext } from "../../core/context";
 import { PayKitError, PAYKIT_ERROR_CODES } from "../../core/errors";
 import type { ProviderSubscription } from "../../providers/provider";
 import {
-  buildSubscribeResult,
   clearScheduledSubscriptionsInGroup,
-  createMetadata,
   deleteScheduledSubscriptionsInGroup,
   endSubscriptions,
   getActiveSubscriptionInGroup,
   getScheduledSubscriptionsInGroup,
   getSubscriptionByProviderSubscriptionId,
   insertSubscriptionRecord,
-  linkMetadataToCheckoutSession,
   replaceSubscriptionSchedule,
-  type SubscribeResult,
-  type SubscriptionWithCatalog,
   scheduleSubscriptionCancellation,
   syncSubscriptionBillingState,
   syncSubscriptionFromProvider,
@@ -22,41 +17,16 @@ import {
 } from "../../services/billing-service";
 import { upsertProviderCustomer } from "../../services/customer-service";
 import { getDefaultPaymentMethod } from "../../services/payment-method-service";
-import type { StoredProductWithPrice } from "../../services/product-service";
-import {
-  getDefaultProductInGroup,
-  getLatestProductWithPrice,
-} from "../../services/product-service";
-import type { NormalizedPlan } from "../../types/schema";
+import { getLatestProductWithPrice } from "../../services/product-service";
 import type {
-  BillingPlan,
-  PayKitBillingPlan,
-  StripeCheckoutAction,
-  StripeExecutionResult,
-  StripeBillingPlan,
-  StripeSubscriptionAction,
+  ProviderInvoicePayload,
+  SubscribeContext,
   SubscribeInput,
+  SubscribeResult,
+  SubscribeResultInput,
 } from "./subscribe.types";
-import { serializeBillingPlan } from "./subscribe.types";
 
-interface SubscribeContext {
-  customerId: string;
-  providerId: string;
-  normalizedPlan: NormalizedPlan;
-  storedPlan: StoredProductWithPrice;
-  providerCustomerId: string;
-  defaultPaymentMethod: unknown;
-  activeSubscription: SubscriptionWithCatalog | null;
-  scheduledSubscriptions: readonly SubscriptionWithCatalog[];
-  isFreeTarget: boolean;
-  isPaidTarget: boolean;
-  isUpgrade: boolean;
-  shouldUseCheckout: boolean;
-  trialDays: number | null;
-  successUrl: string;
-  cancelUrl?: string;
-}
-
+/** Applies the requested plan change for a customer and returns the immediate subscribe result. */
 export async function subscribeToPlan(
   ctx: PayKitContext,
   input: SubscribeInput,
@@ -65,35 +35,36 @@ export async function subscribeToPlan(
     const startTime = Date.now();
     ctx.logger.info({ planId: input.planId, customerId: input.customerId }, "subscribe started");
 
-    const subCtx = await setupSubscribeContext(ctx, input);
-    const paykitPlan = computeBillingPlan(subCtx);
+    const subCtx = await loadSubscribeContext(ctx, input);
 
-    const action =
-      paykitPlan.updateSubscription?.status === "ended"
-        ? "switch"
-        : paykitPlan.updateSubscription?.canceled
-          ? subCtx.isFreeTarget
-            ? "cancel-to-free"
-            : "downgrade"
-          : paykitPlan.insertSubscriptions.length > 0 && !paykitPlan.updateSubscription
-            ? "new"
-            : subCtx.isUpgrade
-              ? "upgrade"
-              : "resume";
-    ctx.logger.info({ action }, "subscribe plan computed");
-
-    const stripePlan = evaluateStripePlan(subCtx, paykitPlan);
-    const billingPlan: BillingPlan = { paykit: paykitPlan, stripe: stripePlan };
-    const result = await executeBillingPlan(ctx, subCtx, billingPlan);
+    let result: SubscribeResult;
+    if (isSamePlan(subCtx)) {
+      // Same plan means either a noop or resuming a pending cancellation.
+      result = await handleSamePlanSubscribe(ctx, subCtx);
+    } else if (!subCtx.activeSubscription) {
+      // No current subscription means this is the customer's first plan in the group.
+      result = await handleInitialSubscribe(ctx, subCtx);
+    } else if (!hasProviderSubscription(subCtx.activeSubscription)) {
+      // A local-only active subscription can be replaced immediately without provider updates.
+      result = await handleLocalPlanSwitch(ctx, subCtx);
+    } else if (subCtx.isFreeTarget) {
+      // Switching from paid to free always happens at period end.
+      result = await handleCancelToFree(ctx, subCtx);
+    } else if (!subCtx.isUpgrade) {
+      // Paid downgrades stay active now and schedule the cheaper plan for later.
+      result = await handleScheduledDowngrade(ctx, subCtx);
+    } else {
+      // Paid upgrades take effect immediately or fall back to checkout.
+      result = await handleUpgrade(ctx, subCtx);
+    }
 
     const duration = Date.now() - startTime;
-    ctx.logger.info({ action, duration }, "subscribe completed");
-
+    ctx.logger.info({ duration }, "subscribe completed");
     return result;
   });
 }
 
-async function setupSubscribeContext(
+export async function loadSubscribeContext(
   ctx: PayKitContext,
   input: SubscribeInput,
 ): Promise<SubscribeContext> {
@@ -114,7 +85,6 @@ async function setupSubscribeContext(
 
   const isFreeTarget = storedPlan.priceAmount === null;
   const isPaidTarget = !isFreeTarget;
-
   if (isPaidTarget && !storedPlan.providerPriceId) {
     throw PayKitError.from(
       "BAD_REQUEST",
@@ -126,10 +96,11 @@ async function setupSubscribeContext(
   const { providerCustomerId } = await upsertProviderCustomer(ctx, {
     customerId: input.customerId,
   });
-  const defaultPaymentMethod = await getDefaultPaymentMethod(ctx.database, {
-    customerId: input.customerId,
-    providerId,
-  });
+  const hasDefaultPaymentMethod =
+    (await getDefaultPaymentMethod(ctx.database, {
+      customerId: input.customerId,
+      providerId,
+    })) != null;
 
   const activeSubscription = storedPlan.group
     ? await getActiveSubscriptionInGroup(ctx.database, {
@@ -137,7 +108,6 @@ async function setupSubscribeContext(
         group: storedPlan.group,
       })
     : null;
-
   const scheduledSubscriptions = storedPlan.group
     ? await getScheduledSubscriptionsInGroup(ctx.database, {
         customerId: input.customerId,
@@ -145,23 +115,17 @@ async function setupSubscribeContext(
       })
     : [];
 
-  const hasProviderSubscription =
-    activeSubscription?.providerData != null &&
-    typeof (activeSubscription.providerData as Record<string, unknown>).subscriptionId === "string";
-
   const activeAmount = activeSubscription?.priceAmount ?? 0;
   const targetAmount = storedPlan.priceAmount ?? 0;
   const isUpgrade =
-    activeSubscription != null && hasProviderSubscription && targetAmount > activeAmount;
-
-  const shouldUseCheckout =
-    isPaidTarget && (input.forceCheckout === true || defaultPaymentMethod == null);
+    activeSubscription != null &&
+    hasProviderSubscription(activeSubscription) &&
+    targetAmount > activeAmount;
 
   return {
     activeSubscription,
     cancelUrl: input.cancelUrl,
     customerId: input.customerId,
-    defaultPaymentMethod,
     isFreeTarget,
     isPaidTarget,
     isUpgrade,
@@ -169,330 +133,185 @@ async function setupSubscribeContext(
     providerCustomerId,
     providerId,
     scheduledSubscriptions,
-    shouldUseCheckout,
+    shouldUseCheckout: isPaidTarget && (input.forceCheckout === true || !hasDefaultPaymentMethod),
     storedPlan,
     successUrl: input.successUrl,
-    trialDays: normalizedPlan.trialDays,
   };
 }
 
-function computeBillingPlan(subCtx: SubscribeContext): PayKitBillingPlan {
-  const { activeSubscription, scheduledSubscriptions, storedPlan, normalizedPlan } = subCtx;
-  const now = new Date();
+type ActiveSubscription = SubscribeContext["activeSubscription"];
 
-  const hasProviderSubscription =
-    activeSubscription?.providerData != null &&
-    typeof (activeSubscription.providerData as Record<string, unknown>).subscriptionId === "string";
-
-  const basePlan: PayKitBillingPlan = {
-    clearScheduledInGroup: false,
-    customerId: subCtx.customerId,
-    deleteScheduledInGroup: false,
-    group: storedPlan.group,
-    insertSubscriptions: [],
-    updateSubscription: null,
-  };
-
-  // --- No active subscription: fresh subscription ---
-  if (!activeSubscription) {
-    const status = subCtx.isFreeTarget
-      ? "active"
-      : subCtx.trialDays && subCtx.trialDays > 0
-        ? "trialing"
-        : "active";
-
-    const trialEndsAt =
-      subCtx.trialDays && subCtx.trialDays > 0
-        ? new Date(now.getTime() + subCtx.trialDays * 24 * 60 * 60 * 1000)
-        : null;
-
-    return {
-      ...basePlan,
-      insertSubscriptions: [
-        {
-          customerId: subCtx.customerId,
-          planFeatures: normalizedPlan.includes,
-          productInternalId: storedPlan.internalId,
-          providerId: subCtx.providerId,
-          startedAt: now,
-          status,
-          trialEndsAt,
-        },
-      ],
-    };
-  }
-
-  // --- Same plan: resume or noop ---
-  if (activeSubscription.planId === storedPlan.id) {
-    const hasPendingChange = scheduledSubscriptions.length > 0 || activeSubscription.canceled;
-
-    if (!hasProviderSubscription || !hasPendingChange) {
-      return basePlan; // noop
-    }
-
-    // Resume: clear cancellation + delete scheduled subscriptions
-    return {
-      ...basePlan,
-      deleteScheduledInGroup: true,
-      updateSubscription: {
-        canceled: false,
-        canceledAt: null,
-        subscriptionId: activeSubscription.id,
-        endedAt: null,
-        scheduledProductId: null,
-        status: activeSubscription.status,
-      },
-    };
-  }
-
-  // --- No provider subscription (free→paid or free→free transition) ---
-  if (!hasProviderSubscription) {
-    const status = subCtx.isFreeTarget
-      ? "active"
-      : subCtx.trialDays && subCtx.trialDays > 0
-        ? "trialing"
-        : "active";
-
-    const trialEndsAt =
-      subCtx.trialDays && subCtx.trialDays > 0
-        ? new Date(now.getTime() + subCtx.trialDays * 24 * 60 * 60 * 1000)
-        : null;
-
-    return {
-      ...basePlan,
-      insertSubscriptions: [
-        {
-          customerId: subCtx.customerId,
-          planFeatures: normalizedPlan.includes,
-          productInternalId: storedPlan.internalId,
-          providerId: subCtx.providerId,
-          startedAt: now,
-          status,
-          trialEndsAt,
-        },
-      ],
-      updateSubscription: {
-        canceled: false,
-        canceledAt: null,
-        subscriptionId: activeSubscription.id,
-        endedAt: now,
-        status: "ended",
-      },
-    };
-  }
-
-  // --- Downgrade or cancel-to-free (schedule at period end) ---
-  if (subCtx.isFreeTarget || !subCtx.isUpgrade) {
-    const currentPeriodEndAt = activeSubscription.currentPeriodEndAt;
-
-    return {
-      ...basePlan,
-      clearScheduledInGroup: true,
-      insertSubscriptions: [
-        {
-          customerId: subCtx.customerId,
-          planFeatures: normalizedPlan.includes,
-          productInternalId: storedPlan.internalId,
-          providerId: subCtx.providerId,
-          startedAt: currentPeriodEndAt ?? null,
-          status: "scheduled",
-        },
-      ],
-      updateSubscription: {
-        canceled: true,
-        canceledAt: now,
-        subscriptionId: activeSubscription.id,
-        endedAt: currentPeriodEndAt ?? null,
-        scheduledProductId: storedPlan.internalId,
-        status: activeSubscription.status,
-      },
-    };
-  }
-
-  // --- Upgrade (immediate) ---
+function buildSubscribeResult(input: SubscribeResultInput): SubscribeResult {
   return {
-    ...basePlan,
-    deleteScheduledInGroup: true,
-    insertSubscriptions: [
-      {
-        customerId: subCtx.customerId,
-        planFeatures: normalizedPlan.includes,
-        productInternalId: storedPlan.internalId,
-        providerId: subCtx.providerId,
-        startedAt: now,
-        status: "active",
-      },
-    ],
-    updateSubscription: {
-      canceled: false,
-      canceledAt: null,
-      subscriptionId: activeSubscription.id,
-      endedAt: now,
-      status: "ended",
-    },
+    invoice: input.invoice
+      ? {
+          currency: input.invoice.currency,
+          hostedUrl: input.invoice.hostedUrl ?? null,
+          providerInvoiceId: input.invoice.providerInvoiceId,
+          status: input.invoice.status,
+          totalAmount: input.invoice.totalAmount,
+        }
+      : undefined,
+    paymentUrl: input.paymentUrl,
+    requiredAction: input.requiredAction ?? null,
   };
 }
 
-function getProviderSubId(sub: SubscriptionWithCatalog): string {
-  return (sub.providerData as Record<string, unknown>)?.subscriptionId as string;
-}
-
-function getProviderSubScheduleId(sub: SubscriptionWithCatalog): string | null {
-  return ((sub.providerData as Record<string, unknown>)?.subscriptionScheduleId as string) ?? null;
-}
-
-function evaluateStripePlan(
-  subCtx: SubscribeContext,
-  paykitPlan: PayKitBillingPlan,
-): StripeBillingPlan {
-  const noAction: StripeBillingPlan = {
-    checkoutAction: { type: "none" },
-    invoiceAction: { type: "none" },
-    subscriptionAction: { type: "none" },
-  };
-
-  const { activeSubscription } = subCtx;
-  const hasProviderSub =
-    activeSubscription?.providerData != null &&
-    typeof (activeSubscription.providerData as Record<string, unknown>).subscriptionId === "string";
-
-  // Free plan only — no Stripe calls
-  if (subCtx.isFreeTarget && !hasProviderSub) {
-    return noAction;
-  }
-
-  // Noop (same plan, no changes)
-  if (paykitPlan.insertSubscriptions.length === 0 && paykitPlan.updateSubscription === null) {
-    return noAction;
-  }
-
-  // --- Resume ---
-  if (
-    activeSubscription &&
-    activeSubscription.planId === subCtx.storedPlan.id &&
-    paykitPlan.updateSubscription
-  ) {
-    return {
-      ...noAction,
-      subscriptionAction: {
-        providerSubscriptionId: getProviderSubId(activeSubscription),
-        providerSubscriptionScheduleId: getProviderSubScheduleId(activeSubscription),
-        type: "resume",
-      },
-    };
-  }
-
-  // --- Cancel to free (with provider subscription) ---
-  if (subCtx.isFreeTarget && activeSubscription && hasProviderSub) {
-    return {
-      ...noAction,
-      subscriptionAction: {
-        currentPeriodEndAt: activeSubscription.currentPeriodEndAt,
-        providerSubscriptionId: getProviderSubId(activeSubscription),
-        providerSubscriptionScheduleId: getProviderSubScheduleId(activeSubscription),
-        type: "cancel",
-      },
-    };
-  }
-
-  // --- Downgrade (schedule change at period end) ---
-  if (activeSubscription && hasProviderSub && !subCtx.isUpgrade && !subCtx.isFreeTarget) {
-    return {
-      ...noAction,
-      subscriptionAction: {
-        providerPriceId: subCtx.storedPlan.providerPriceId!,
-        providerSubscriptionId: getProviderSubId(activeSubscription),
-        providerSubscriptionScheduleId: getProviderSubScheduleId(activeSubscription),
-        type: "schedule_change",
-      },
-    };
-  }
-
-  // --- Upgrade with existing subscription ---
-  if (activeSubscription && hasProviderSub && subCtx.isUpgrade) {
-    if (subCtx.shouldUseCheckout) {
-      // Checkout creates a new subscription — cancel the old one after checkout succeeds.
-      return {
-        ...noAction,
-        checkoutAction: buildCheckoutAction(subCtx),
-        subscriptionAction: {
-          currentPeriodEndAt: activeSubscription.currentPeriodEndAt,
-          providerSubscriptionId: getProviderSubId(activeSubscription),
-          providerSubscriptionScheduleId: getProviderSubScheduleId(activeSubscription),
-          type: "cancel",
-        },
-      };
-    }
-    return {
-      ...noAction,
-      subscriptionAction: {
-        providerPriceId: subCtx.storedPlan.providerPriceId!,
-        providerSubscriptionId: getProviderSubId(activeSubscription),
-        type: "update",
-      },
-    };
-  }
-
-  // --- New subscription (no active, or active was free with no sub) ---
-  if (subCtx.shouldUseCheckout) {
-    return {
-      ...noAction,
-      checkoutAction: buildCheckoutAction(subCtx),
-    };
-  }
-
-  return {
-    ...noAction,
-    subscriptionAction: {
-      providerCustomerId: subCtx.providerCustomerId,
-      providerPriceId: subCtx.storedPlan.providerPriceId!,
-      trialPeriodDays: subCtx.trialDays ?? undefined,
-      type: "create",
-    },
-  };
-}
-
-function buildCheckoutAction(subCtx: SubscribeContext): StripeCheckoutAction {
-  return {
-    cancelUrl: subCtx.cancelUrl,
-    metadata: {
-      paykit_customer_id: subCtx.customerId,
-      paykit_plan_id: subCtx.storedPlan.id,
-    },
-    providerCustomerId: subCtx.providerCustomerId,
-    providerPriceId: subCtx.storedPlan.providerPriceId!,
-    successUrl: subCtx.successUrl,
-    trialPeriodDays: subCtx.trialDays ?? undefined,
-    type: "create",
-  };
-}
-
-async function executeBillingPlan(
+export async function finalizeCheckoutSubscription(
   ctx: PayKitContext,
   subCtx: SubscribeContext,
-  billingPlan: BillingPlan,
-): Promise<SubscribeResult> {
-  const { stripe: stripePlan, paykit: paykitPlan } = billingPlan;
+  input: {
+    invoice?: ProviderInvoicePayload | null;
+    subscription: ProviderSubscription;
+  },
+): Promise<void> {
+  const activeSubscriptionRef = getProviderSubscriptionRef(subCtx.activeSubscription);
 
-  // --- Checkout path: defer everything ---
-  if (stripePlan.checkoutAction.type === "create") {
-    return executeCheckoutPath(ctx, subCtx, billingPlan, stripePlan.checkoutAction);
+  if (isSamePlan(subCtx)) {
+    if (activeSubscriptionRef.subscriptionId === input.subscription.providerSubscriptionId) {
+      return;
+    }
+
+    throw PayKitError.from(
+      "BAD_REQUEST",
+      PAYKIT_ERROR_CODES.PROVIDER_WEBHOOK_INVALID,
+      `Checkout completed for plan "${subCtx.storedPlan.id}" after a different active subscription was already present`,
+    );
   }
 
-  // --- Direct path: execute Stripe then DB ---
-  const stripeResult = await executeStripeAction(ctx, stripePlan.subscriptionAction);
+  if (subCtx.activeSubscription && activeSubscriptionRef.subscriptionId) {
+    if (!subCtx.isUpgrade) {
+      throw PayKitError.from(
+        "BAD_REQUEST",
+        PAYKIT_ERROR_CODES.PROVIDER_WEBHOOK_INVALID,
+        `Checkout completion is only valid for new paid subscriptions or upgrades to "${subCtx.storedPlan.id}"`,
+      );
+    }
 
-  // Execute invoice action if needed
-  if (stripePlan.invoiceAction.type === "create") {
-    await ctx.stripe.createInvoice({
-      autoAdvance: true,
-      lines: stripePlan.invoiceAction.lines,
-      providerCustomerId: stripePlan.invoiceAction.providerCustomerId,
+    await ctx.stripe.cancelSubscription({
+      currentPeriodEndAt: subCtx.activeSubscription.currentPeriodEndAt,
+      providerSubscriptionId: activeSubscriptionRef.subscriptionId,
+      providerSubscriptionScheduleId: activeSubscriptionRef.subscriptionScheduleId,
     });
+
+    await ctx.database.transaction(async (tx) => {
+      await deleteScheduledSubscriptionsInGroupIfNeeded(tx, subCtx);
+      await endSubscriptions(tx, [subCtx.activeSubscription!.id], {
+        canceled: false,
+        endedAt: new Date(),
+        status: "ended",
+      });
+      await upsertProviderBackedTargetSubscription(tx, subCtx, input, {
+        deferred: true,
+      });
+    });
+    return;
   }
 
-  // Execute DB mutations
-  await executePayKitPlan(ctx, subCtx.providerId, paykitPlan, stripeResult);
+  await ctx.database.transaction(async (tx) => {
+    if (subCtx.activeSubscription) {
+      await endSubscriptions(tx, [subCtx.activeSubscription.id], {
+        canceled: false,
+        endedAt: new Date(),
+        status: "ended",
+      });
+    }
+
+    await upsertProviderBackedTargetSubscription(tx, subCtx, input, {
+      deferred: true,
+    });
+  });
+}
+
+function isSamePlan(subCtx: SubscribeContext): boolean {
+  return subCtx.activeSubscription?.planId === subCtx.storedPlan.id;
+}
+
+function getProviderSubscriptionId(subscription: ActiveSubscription): string | null {
+  if (subscription?.providerData == null) {
+    return null;
+  }
+
+  return typeof (subscription.providerData as Record<string, unknown>).subscriptionId === "string"
+    ? ((subscription.providerData as Record<string, unknown>).subscriptionId as string)
+    : null;
+}
+
+function hasProviderSubscription(subscription: ActiveSubscription): boolean {
+  return getProviderSubscriptionId(subscription) != null;
+}
+
+function getProviderSubscriptionRef(subscription: ActiveSubscription): {
+  subscriptionId: string | null;
+  subscriptionScheduleId: string | null;
+} {
+  if (subscription?.providerData == null) {
+    return {
+      subscriptionId: null,
+      subscriptionScheduleId: null,
+    };
+  }
+
+  const providerData = subscription.providerData as Record<string, unknown>;
+  return {
+    subscriptionId:
+      typeof providerData.subscriptionId === "string" ? providerData.subscriptionId : null,
+    subscriptionScheduleId:
+      typeof providerData.subscriptionScheduleId === "string"
+        ? providerData.subscriptionScheduleId
+        : null,
+  };
+}
+
+/** Returns a noop or resumes the current provider subscription. */
+async function handleSamePlanSubscribe(
+  ctx: PayKitContext,
+  subCtx: SubscribeContext,
+): Promise<SubscribeResult> {
+  const activeSubscription = subCtx.activeSubscription;
+  if (!activeSubscription) {
+    throw PayKitError.from("INTERNAL_SERVER_ERROR", PAYKIT_ERROR_CODES.SUBSCRIPTION_CREATE_FAILED);
+  }
+
+  const hasPendingChange = subCtx.scheduledSubscriptions.length > 0 || activeSubscription.canceled;
+  if (!hasProviderSubscription(activeSubscription) || !hasPendingChange) {
+    return buildSubscribeResult({ paymentUrl: null });
+  }
+
+  const activeSubscriptionRef = getProviderSubscriptionRef(activeSubscription);
+  const stripeResult = await ctx.stripe.resumeSubscription({
+    providerSubscriptionId: activeSubscriptionRef.subscriptionId!,
+    providerSubscriptionScheduleId: activeSubscriptionRef.subscriptionScheduleId,
+  });
+
+  await ctx.database.transaction(async (tx) => {
+    await deleteScheduledSubscriptionsInGroupIfNeeded(tx, subCtx);
+    await syncSubscriptionFromProvider(tx, {
+      subscriptionId: activeSubscription.id,
+      providerSubscription: stripeResult.subscription ?? {
+        cancelAtPeriodEnd: false,
+        providerSubscriptionId: activeSubscriptionRef.subscriptionId!,
+        providerSubscriptionScheduleId: null,
+        status: activeSubscription.status,
+      },
+    });
+    await replaceSubscriptionSchedule(tx, {
+      subscriptionId: activeSubscription.id,
+      scheduledProductId: null,
+    });
+    if (stripeResult.subscription) {
+      await syncSubscriptionBillingState(tx, {
+        currentPeriodEndAt: stripeResult.subscription.currentPeriodEndAt,
+        currentPeriodStartAt: stripeResult.subscription.currentPeriodStartAt,
+        providerData: {
+          subscriptionId: stripeResult.subscription.providerSubscriptionId,
+          subscriptionScheduleId: stripeResult.subscription.providerSubscriptionScheduleId ?? null,
+        },
+        status: stripeResult.subscription.status,
+        subscriptionId: activeSubscription.id,
+      });
+    }
+  });
 
   return buildSubscribeResult({
     invoice: stripeResult.invoice,
@@ -501,253 +320,386 @@ async function executeBillingPlan(
   });
 }
 
-async function executeCheckoutPath(
+/** Creates the first subscription in the product group. */
+async function handleInitialSubscribe(
   ctx: PayKitContext,
   subCtx: SubscribeContext,
-  billingPlan: BillingPlan,
-  checkoutAction: Extract<StripeCheckoutAction, { type: "create" }>,
 ): Promise<SubscribeResult> {
-  const { id: metadataId } = await createMetadata(ctx.database, {
-    data: {
-      billingPlan: serializeBillingPlan(billingPlan),
-      customerId: subCtx.customerId,
-      planId: subCtx.storedPlan.id,
-      type: "subscribe_deferred",
-    },
-    providerId: subCtx.providerId,
-    type: "subscribe_deferred",
+  if (subCtx.isFreeTarget) {
+    await ctx.database.transaction(async (tx) => {
+      await insertLocalTargetSubscription(tx, subCtx, {
+        startedAt: new Date(),
+        status: "active",
+      });
+    });
+
+    return buildSubscribeResult({ paymentUrl: null });
+  }
+
+  if (subCtx.shouldUseCheckout) {
+    return createCheckoutSubscribe(ctx, subCtx);
+  }
+
+  const stripeResult = await ctx.stripe.createSubscription({
+    providerCustomerId: subCtx.providerCustomerId,
+    providerPriceId: subCtx.storedPlan.providerPriceId!,
   });
 
+  await ctx.database.transaction(async (tx) => {
+    if (!stripeResult.subscription) {
+      throw PayKitError.from(
+        "INTERNAL_SERVER_ERROR",
+        PAYKIT_ERROR_CODES.SUBSCRIPTION_CREATE_FAILED,
+      );
+    }
+
+    await upsertProviderBackedTargetSubscription(tx, subCtx, {
+      invoice: stripeResult.invoice ?? null,
+      subscription: stripeResult.subscription,
+    });
+  });
+
+  return buildSubscribeResult({
+    invoice: stripeResult.invoice,
+    paymentUrl: stripeResult.paymentUrl,
+    requiredAction: stripeResult.requiredAction,
+  });
+}
+
+/** Replaces a local-only subscription with the requested target plan. */
+async function handleLocalPlanSwitch(
+  ctx: PayKitContext,
+  subCtx: SubscribeContext,
+): Promise<SubscribeResult> {
+  const activeSubscription = subCtx.activeSubscription;
+  if (!activeSubscription) {
+    throw PayKitError.from("INTERNAL_SERVER_ERROR", PAYKIT_ERROR_CODES.SUBSCRIPTION_CREATE_FAILED);
+  }
+
+  if (subCtx.shouldUseCheckout) {
+    return createCheckoutSubscribe(ctx, subCtx);
+  }
+
+  if (subCtx.isFreeTarget) {
+    await ctx.database.transaction(async (tx) => {
+      const now = new Date();
+      await endSubscriptions(tx, [activeSubscription.id], {
+        canceled: false,
+        endedAt: now,
+        status: "ended",
+      });
+      await insertLocalTargetSubscription(tx, subCtx, {
+        startedAt: now,
+        status: "active",
+      });
+    });
+
+    return buildSubscribeResult({ paymentUrl: null });
+  }
+
+  const stripeResult = await ctx.stripe.createSubscription({
+    providerCustomerId: subCtx.providerCustomerId,
+    providerPriceId: subCtx.storedPlan.providerPriceId!,
+  });
+
+  await ctx.database.transaction(async (tx) => {
+    if (!stripeResult.subscription) {
+      throw PayKitError.from(
+        "INTERNAL_SERVER_ERROR",
+        PAYKIT_ERROR_CODES.SUBSCRIPTION_CREATE_FAILED,
+      );
+    }
+
+    await endSubscriptions(tx, [activeSubscription.id], {
+      canceled: false,
+      endedAt: new Date(),
+      status: "ended",
+    });
+    await upsertProviderBackedTargetSubscription(tx, subCtx, {
+      invoice: stripeResult.invoice ?? null,
+      subscription: stripeResult.subscription,
+    });
+  });
+
+  return buildSubscribeResult({
+    invoice: stripeResult.invoice,
+    paymentUrl: stripeResult.paymentUrl,
+    requiredAction: stripeResult.requiredAction,
+  });
+}
+
+/** Cancels the paid subscription and schedules the free plan for period end. */
+async function handleCancelToFree(
+  ctx: PayKitContext,
+  subCtx: SubscribeContext,
+): Promise<SubscribeResult> {
+  const activeSubscription = subCtx.activeSubscription;
+  const activeSubscriptionRef = getProviderSubscriptionRef(activeSubscription);
+  if (!activeSubscription || !activeSubscriptionRef.subscriptionId) {
+    throw PayKitError.from("INTERNAL_SERVER_ERROR", PAYKIT_ERROR_CODES.SUBSCRIPTION_CREATE_FAILED);
+  }
+
+  const stripeResult = await ctx.stripe.cancelSubscription({
+    currentPeriodEndAt: activeSubscription.currentPeriodEndAt,
+    providerSubscriptionId: activeSubscriptionRef.subscriptionId,
+    providerSubscriptionScheduleId: activeSubscriptionRef.subscriptionScheduleId,
+  });
+
+  await ctx.database.transaction(async (tx) => {
+    await clearScheduledSubscriptionsInGroupIfNeeded(tx, subCtx);
+    await insertLocalTargetSubscription(tx, subCtx, {
+      startedAt: activeSubscription.currentPeriodEndAt ?? null,
+      status: "scheduled",
+    });
+    await scheduleSubscriptionCancellation(tx, {
+      canceledAt: new Date(),
+      currentPeriodEndAt: activeSubscription.currentPeriodEndAt ?? null,
+      subscriptionId: activeSubscription.id,
+    });
+    await replaceSubscriptionSchedule(tx, {
+      scheduledProductId: subCtx.storedPlan.internalId,
+      subscriptionId: activeSubscription.id,
+    });
+    if (stripeResult.subscription) {
+      await syncSubscriptionBillingState(tx, {
+        currentPeriodEndAt: stripeResult.subscription.currentPeriodEndAt,
+        currentPeriodStartAt: stripeResult.subscription.currentPeriodStartAt,
+        providerData: {
+          subscriptionId: stripeResult.subscription.providerSubscriptionId,
+          subscriptionScheduleId: stripeResult.subscription.providerSubscriptionScheduleId ?? null,
+        },
+        status: stripeResult.subscription.status,
+        subscriptionId: activeSubscription.id,
+      });
+    }
+  });
+
+  return buildSubscribeResult({
+    invoice: stripeResult.invoice,
+    paymentUrl: stripeResult.paymentUrl,
+    requiredAction: stripeResult.requiredAction,
+  });
+}
+
+/** Schedules a lower paid tier to start when the current billing period ends. */
+async function handleScheduledDowngrade(
+  ctx: PayKitContext,
+  subCtx: SubscribeContext,
+): Promise<SubscribeResult> {
+  const activeSubscription = subCtx.activeSubscription;
+  const activeSubscriptionRef = getProviderSubscriptionRef(activeSubscription);
+  if (!activeSubscription || !activeSubscriptionRef.subscriptionId) {
+    throw PayKitError.from("INTERNAL_SERVER_ERROR", PAYKIT_ERROR_CODES.SUBSCRIPTION_CREATE_FAILED);
+  }
+
+  const stripeResult = await ctx.stripe.scheduleSubscriptionChange({
+    providerPriceId: subCtx.storedPlan.providerPriceId!,
+    providerSubscriptionId: activeSubscriptionRef.subscriptionId,
+    providerSubscriptionScheduleId: activeSubscriptionRef.subscriptionScheduleId,
+  });
+
+  await ctx.database.transaction(async (tx) => {
+    await clearScheduledSubscriptionsInGroupIfNeeded(tx, subCtx);
+    await insertLocalTargetSubscription(tx, subCtx, {
+      startedAt: activeSubscription.currentPeriodEndAt ?? null,
+      status: "scheduled",
+    });
+    await scheduleSubscriptionCancellation(tx, {
+      canceledAt: new Date(),
+      currentPeriodEndAt: activeSubscription.currentPeriodEndAt ?? null,
+      subscriptionId: activeSubscription.id,
+    });
+    await replaceSubscriptionSchedule(tx, {
+      scheduledProductId: subCtx.storedPlan.internalId,
+      subscriptionId: activeSubscription.id,
+    });
+    if (stripeResult.subscription) {
+      await syncSubscriptionBillingState(tx, {
+        currentPeriodEndAt: stripeResult.subscription.currentPeriodEndAt,
+        currentPeriodStartAt: stripeResult.subscription.currentPeriodStartAt,
+        providerData: {
+          subscriptionId: stripeResult.subscription.providerSubscriptionId,
+          subscriptionScheduleId: stripeResult.subscription.providerSubscriptionScheduleId ?? null,
+        },
+        status: stripeResult.subscription.status,
+        subscriptionId: activeSubscription.id,
+      });
+    }
+  });
+
+  return buildSubscribeResult({
+    invoice: stripeResult.invoice,
+    paymentUrl: stripeResult.paymentUrl,
+    requiredAction: stripeResult.requiredAction,
+  });
+}
+
+/** Upgrades the customer immediately or redirects them to checkout. */
+async function handleUpgrade(
+  ctx: PayKitContext,
+  subCtx: SubscribeContext,
+): Promise<SubscribeResult> {
+  const activeSubscription = subCtx.activeSubscription;
+  const activeSubscriptionRef = getProviderSubscriptionRef(activeSubscription);
+  if (!activeSubscription || !activeSubscriptionRef.subscriptionId) {
+    throw PayKitError.from("INTERNAL_SERVER_ERROR", PAYKIT_ERROR_CODES.SUBSCRIPTION_CREATE_FAILED);
+  }
+
+  if (subCtx.shouldUseCheckout) {
+    return createCheckoutSubscribe(ctx, subCtx);
+  }
+
+  const stripeResult = await ctx.stripe.updateSubscription({
+    providerPriceId: subCtx.storedPlan.providerPriceId!,
+    providerSubscriptionId: activeSubscriptionRef.subscriptionId,
+  });
+
+  await ctx.database.transaction(async (tx) => {
+    if (!stripeResult.subscription) {
+      throw PayKitError.from(
+        "INTERNAL_SERVER_ERROR",
+        PAYKIT_ERROR_CODES.SUBSCRIPTION_CREATE_FAILED,
+      );
+    }
+
+    await deleteScheduledSubscriptionsInGroupIfNeeded(tx, subCtx);
+    await endSubscriptions(tx, [activeSubscription.id], {
+      canceled: false,
+      endedAt: new Date(),
+      status: "ended",
+    });
+    await upsertProviderBackedTargetSubscription(tx, subCtx, {
+      invoice: stripeResult.invoice ?? null,
+      subscription: stripeResult.subscription,
+    });
+  });
+
+  return buildSubscribeResult({
+    invoice: stripeResult.invoice,
+    paymentUrl: stripeResult.paymentUrl,
+    requiredAction: stripeResult.requiredAction,
+  });
+}
+
+/** Starts checkout and lets the webhook finalize the subscription later. */
+async function createCheckoutSubscribe(
+  ctx: PayKitContext,
+  subCtx: SubscribeContext,
+): Promise<SubscribeResult> {
   const checkoutResult = await ctx.stripe.createSubscriptionCheckout({
-    cancelUrl: checkoutAction.cancelUrl,
+    cancelUrl: subCtx.cancelUrl,
     metadata: {
-      ...checkoutAction.metadata,
-      paykit_metadata_id: metadataId,
+      paykit_customer_id: subCtx.customerId,
+      paykit_intent: "subscribe",
+      paykit_plan_id: subCtx.storedPlan.id,
     },
-    providerCustomerId: checkoutAction.providerCustomerId,
-    providerPriceId: checkoutAction.providerPriceId,
-    successUrl: checkoutAction.successUrl,
-    trialPeriodDays: checkoutAction.trialPeriodDays,
-  });
-
-  await linkMetadataToCheckoutSession(ctx.database, {
-    id: metadataId,
-    providerCheckoutSessionId: checkoutResult.providerCheckoutSessionId,
+    providerCustomerId: subCtx.providerCustomerId,
+    providerPriceId: subCtx.storedPlan.providerPriceId!,
+    successUrl: subCtx.successUrl,
   });
 
   return buildSubscribeResult({ paymentUrl: checkoutResult.paymentUrl });
 }
 
-export async function executeStripeAction(
-  ctx: PayKitContext,
-  action: StripeSubscriptionAction,
-): Promise<StripeExecutionResult> {
-  if (action.type === "none") {
-    return { paymentUrl: null };
-  }
-
-  if (action.type === "create") {
-    return ctx.stripe.createSubscription({
-      providerCustomerId: action.providerCustomerId,
-      providerPriceId: action.providerPriceId,
-      trialPeriodDays: action.trialPeriodDays,
-    });
-  }
-
-  if (action.type === "update") {
-    return ctx.stripe.updateSubscription({
-      providerPriceId: action.providerPriceId,
-      providerSubscriptionId: action.providerSubscriptionId,
-    });
-  }
-
-  if (action.type === "cancel") {
-    return ctx.stripe.cancelSubscription({
-      currentPeriodEndAt: action.currentPeriodEndAt,
-      providerSubscriptionId: action.providerSubscriptionId,
-      providerSubscriptionScheduleId: action.providerSubscriptionScheduleId,
-    });
-  }
-
-  if (action.type === "schedule_change") {
-    return ctx.stripe.scheduleSubscriptionChange({
-      providerPriceId: action.providerPriceId,
-      providerSubscriptionId: action.providerSubscriptionId,
-      providerSubscriptionScheduleId: action.providerSubscriptionScheduleId,
-    });
-  }
-
-  // resume
-  return ctx.stripe.resumeSubscription({
-    providerSubscriptionId: action.providerSubscriptionId,
-    providerSubscriptionScheduleId: action.providerSubscriptionScheduleId,
+async function insertLocalTargetSubscription(
+  database: PayKitContext["database"],
+  subCtx: SubscribeContext,
+  input: {
+    startedAt: Date | null;
+    status: "active" | "scheduled";
+  },
+): Promise<void> {
+  await insertSubscriptionRecord(database, {
+    customerId: subCtx.customerId,
+    planFeatures: subCtx.normalizedPlan.includes,
+    productInternalId: subCtx.storedPlan.internalId,
+    providerId: subCtx.providerId,
+    startedAt: input.startedAt,
+    status: input.status,
   });
 }
 
-// Shared DB mutation executor — used by both direct path and webhook deferred path
-
-export async function executePayKitPlan(
-  ctx: PayKitContext,
-  providerId: string,
-  plan: PayKitBillingPlan,
-  stripeResult: {
-    subscription?: ProviderSubscription | null;
-    invoice?: {
-      providerInvoiceId: string;
-      currency: string;
-      status: string | null;
-      totalAmount: number;
-      hostedUrl?: string | null;
-      periodStartAt?: Date | null;
-      periodEndAt?: Date | null;
-    } | null;
+async function upsertProviderBackedTargetSubscription(
+  database: PayKitContext["database"],
+  subCtx: SubscribeContext,
+  input: {
+    invoice?: ProviderInvoicePayload | null;
+    subscription: ProviderSubscription;
   },
   options?: { deferred?: boolean },
 ): Promise<void> {
-  await ctx.database.transaction(async (tx) => {
-    // 1. Clear scheduled subscriptions in group
-    if (plan.clearScheduledInGroup && plan.group) {
-      await clearScheduledSubscriptionsInGroup(tx, {
-        customerId: plan.customerId,
-        group: plan.group,
+  const providerData = {
+    subscriptionId: input.subscription.providerSubscriptionId,
+    subscriptionScheduleId: input.subscription.providerSubscriptionScheduleId ?? null,
+  };
+
+  let subscriptionId: string | null = null;
+  if (options?.deferred) {
+    const existingSub = await getSubscriptionByProviderSubscriptionId(database, {
+      providerId: subCtx.providerId,
+      providerSubscriptionId: input.subscription.providerSubscriptionId,
+    });
+    if (existingSub) {
+      subscriptionId = existingSub.id;
+      await syncSubscriptionBillingState(database, {
+        currentPeriodEndAt: input.subscription.currentPeriodEndAt ?? null,
+        currentPeriodStartAt: input.subscription.currentPeriodStartAt ?? null,
+        providerData,
+        status: input.subscription.status,
+        subscriptionId: existingSub.id,
       });
     }
+  }
 
-    // 2. Delete scheduled subscriptions in group
-    if (plan.deleteScheduledInGroup && plan.group) {
-      await deleteScheduledSubscriptionsInGroup(tx, {
-        customerId: plan.customerId,
-        group: plan.group,
-      });
-    }
+  if (!subscriptionId) {
+    const inserted = await insertSubscriptionRecord(database, {
+      currentPeriodEndAt: input.subscription.currentPeriodEndAt ?? null,
+      currentPeriodStartAt: input.subscription.currentPeriodStartAt ?? null,
+      customerId: subCtx.customerId,
+      planFeatures: subCtx.normalizedPlan.includes,
+      productInternalId: subCtx.storedPlan.internalId,
+      providerId: subCtx.providerId,
+      providerData,
+      startedAt: input.subscription.currentPeriodStartAt ?? new Date(),
+      status: input.subscription.status,
+    });
+    subscriptionId = inserted.id;
+  }
 
-    // 3. Update existing subscription
-    if (plan.updateSubscription) {
-      const upd = plan.updateSubscription;
+  if (input.invoice) {
+    await upsertInvoiceRecord(database, {
+      customerId: subCtx.customerId,
+      invoice: input.invoice,
+      providerId: subCtx.providerId,
+      subscriptionId,
+    });
+  }
+}
 
-      if (upd.status === "ended") {
-        await endSubscriptions(tx, [upd.subscriptionId], {
-          canceled: upd.canceled,
-          endedAt: upd.endedAt ?? new Date(),
-          status: "ended",
-        });
-      } else if (upd.canceled) {
-        await scheduleSubscriptionCancellation(tx, {
-          canceledAt: upd.canceledAt ?? new Date(),
-          currentPeriodEndAt: upd.endedAt,
-          subscriptionId: upd.subscriptionId,
-        });
-        if (upd.scheduledProductId !== undefined) {
-          await replaceSubscriptionSchedule(tx, {
-            subscriptionId: upd.subscriptionId,
-            scheduledProductId: upd.scheduledProductId,
-          });
-        }
-      } else {
-        // Resume: clear cancellation
-        await syncSubscriptionFromProvider(tx, {
-          subscriptionId: upd.subscriptionId,
-          providerSubscription: stripeResult.subscription
-            ? stripeResult.subscription
-            : { cancelAtPeriodEnd: false, providerSubscriptionId: "", status: upd.status },
-        });
-        await replaceSubscriptionSchedule(tx, {
-          subscriptionId: upd.subscriptionId,
-          scheduledProductId: null,
-        });
-        if (stripeResult.subscription) {
-          await syncSubscriptionBillingState(tx, {
-            subscriptionId: upd.subscriptionId,
-            currentPeriodEndAt: stripeResult.subscription.currentPeriodEndAt,
-            currentPeriodStartAt: stripeResult.subscription.currentPeriodStartAt,
-            status: stripeResult.subscription.status,
-          });
-        }
-      }
-    }
+async function clearScheduledSubscriptionsInGroupIfNeeded(
+  database: PayKitContext["database"],
+  subCtx: SubscribeContext,
+): Promise<void> {
+  if (!subCtx.storedPlan.group) {
+    return;
+  }
 
-    // 4. Insert new subscriptions and link invoices
-    for (const insertOp of plan.insertSubscriptions) {
-      // Scheduled subscriptions keep their own status and period dates — the Stripe
-      // result describes the *existing* subscription (e.g. still "active" after
-      // cancel), not the future scheduled subscription.
-      const isScheduled = insertOp.status === "scheduled";
-      const periodStart = isScheduled
-        ? (insertOp.currentPeriodStartAt ?? null)
-        : (stripeResult.subscription?.currentPeriodStartAt ??
-          insertOp.currentPeriodStartAt ??
-          null);
-      const periodEnd = isScheduled
-        ? (insertOp.currentPeriodEndAt ?? null)
-        : (stripeResult.subscription?.currentPeriodEndAt ?? insertOp.currentPeriodEndAt ?? null);
-      const status = isScheduled
-        ? insertOp.status
-        : (stripeResult.subscription?.status ?? insertOp.status);
-
-      // Build providerData from the Stripe result for non-scheduled subscriptions
-      const providerData =
-        !isScheduled && stripeResult.subscription
-          ? {
-              subscriptionId: stripeResult.subscription.providerSubscriptionId,
-              subscriptionScheduleId:
-                stripeResult.subscription.providerSubscriptionScheduleId ?? null,
-            }
-          : null;
-
-      // When a deferred checkout completes, the subscription.created webhook may
-      // have already arrived and created the subscription record.
-      // Detect this and reuse the existing row instead of inserting a duplicate.
-      // Only applies in deferred (webhook) context — direct path always inserts.
-      let subscriptionRow: { id: string } | null = null;
-      if (options?.deferred && !isScheduled && stripeResult.subscription) {
-        const existingSub = await getSubscriptionByProviderSubscriptionId(tx, {
-          providerId,
-          providerSubscriptionId: stripeResult.subscription.providerSubscriptionId,
-        });
-        if (existingSub) {
-          subscriptionRow = { id: existingSub.id };
-          await syncSubscriptionBillingState(tx, {
-            subscriptionId: existingSub.id,
-            currentPeriodEndAt: periodEnd,
-            currentPeriodStartAt: periodStart,
-            providerData,
-            status,
-          });
-        }
-      }
-
-      if (!subscriptionRow) {
-        subscriptionRow = await insertSubscriptionRecord(tx, {
-          currentPeriodEndAt: periodEnd,
-          currentPeriodStartAt: periodStart,
-          customerId: insertOp.customerId,
-          planFeatures: insertOp.planFeatures,
-          productInternalId: insertOp.productInternalId,
-          providerId,
-          providerData,
-          startedAt: insertOp.startedAt,
-          status,
-          trialEndsAt: insertOp.trialEndsAt ?? null,
-        });
-      }
-
-      // Link invoice to the subscription record
-      if (stripeResult.subscription && stripeResult.invoice && !isScheduled) {
-        await upsertInvoiceRecord(tx, {
-          customerId: insertOp.customerId,
-          invoice: stripeResult.invoice,
-          providerId,
-          subscriptionId: subscriptionRow.id,
-        });
-      }
-    }
+  await clearScheduledSubscriptionsInGroup(database, {
+    customerId: subCtx.customerId,
+    group: subCtx.storedPlan.group,
   });
 }
 
-export async function resolveFallbackSuccessPlanId(
-  ctx: PayKitContext,
-  group: string,
-): Promise<string | null> {
-  const fallback = await getDefaultProductInGroup(ctx.database, group, ctx.provider.id);
-  return fallback?.id ?? null;
+async function deleteScheduledSubscriptionsInGroupIfNeeded(
+  database: PayKitContext["database"],
+  subCtx: SubscribeContext,
+): Promise<void> {
+  if (!subCtx.storedPlan.group) {
+    return;
+  }
+
+  await deleteScheduledSubscriptionsInGroup(database, {
+    customerId: subCtx.customerId,
+    group: subCtx.storedPlan.group,
+  });
 }

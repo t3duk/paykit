@@ -78,6 +78,11 @@ type PayKitEndpoint<TPath extends string, TBody, TResult> = ((ctx: {
 
 export interface PayKitAPI<TOptions extends PayKitOptions = PayKitOptions> {
   subscribe: PayKitEndpoint<"/subscribe", PayKitSubscribeInput<TOptions>, PayKitSubscribeResult>;
+  customerPortal: PayKitEndpoint<
+    "/customer-portal",
+    { returnUrl?: string; customerId?: string },
+    { url: string }
+  >;
 }
 
 export interface PayKitInstance<TOptions extends PayKitOptions = PayKitOptions> {
