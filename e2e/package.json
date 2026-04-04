@@ -6,7 +6,8 @@
     "test": "vitest run --config smoke/vitest.config.ts",
     "test:watch": "vitest --config smoke/vitest.config.ts",
     "test:cli": "vitest run --config cli/vitest.config.ts",
-    "test:cli:watch": "vitest --config cli/vitest.config.ts"
+    "test:cli:watch": "vitest --config cli/vitest.config.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@paykitjs/stripe": "workspace:*",
