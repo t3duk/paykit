@@ -206,48 +206,6 @@ export function definePayKitMethod<const TConfig extends PayKitMethodConfig, TRe
   return call as PayKitMethod<ServerMethodInput<TConfig>, TResult>;
 }
 
-export function definePayKitRoute<
-  const TConfig extends PayKitMethodRouteConfig,
-  TResult,
-  TRouteInput = TConfig["resolveInput"] extends (...args: unknown[]) => infer TResolved
-    ? Awaited<TResolved>
-    : undefined,
->(
-  config: TConfig,
-  handler: (
-    ctx: PayKitMethodContext<
-      TRouteInput,
-      false,
-      InferRouteContext<{ route: TConfig }>["params"],
-      InferRouteContext<{ route: TConfig }>["headers"],
-      InferRouteContext<{ route: TConfig }>["request"]
-    >,
-  ) => Promise<TResult> | TResult,
-) {
-  return createPayKitEndpoint(
-    config.path,
-    {
-      ...config,
-      client: undefined,
-      path: undefined,
-      resolveInput: undefined,
-    },
-    async (ctx) => {
-      const input = config.resolveInput
-        ? await config.resolveInput(ctx as BetterCallEndpointContext)
-        : (ctx.body as TRouteInput);
-
-      return handler({
-        headers: ctx.headers as InferRouteContext<{ route: TConfig }>["headers"],
-        input: input as TRouteInput,
-        params: ctx.params as InferRouteContext<{ route: TConfig }>["params"],
-        paykit: ctx.context,
-        request: ctx.request as InferRouteContext<{ route: TConfig }>["request"],
-      });
-    },
-  );
-}
-
 function getInputCustomerId(input: unknown): string | undefined {
   if (!input || typeof input !== "object") {
     return undefined;
