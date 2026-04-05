@@ -14,9 +14,11 @@ import {
 import { getLatestProductWithPrice } from "../product/product.service";
 import {
   getActiveSubscriptionInGroup,
+  getCurrentSubscriptions,
   getScheduledSubscriptionsInGroup,
   insertSubscriptionRecord,
 } from "../subscription/subscription.service";
+import type { DeleteCustomerAction, UpsertCustomerAction } from "../types/events";
 import type { Customer } from "../types/models";
 import type {
   CustomerEntitlement,
@@ -140,6 +142,19 @@ export async function syncCustomerWithDefaults(
   const syncedCustomer = await syncCustomer(ctx.database, input);
   await ensureDefaultPlansForCustomer(ctx, syncedCustomer.id);
   return syncedCustomer;
+}
+
+export async function applyCustomerWebhookAction(
+  database: PayKitDatabase,
+  action: UpsertCustomerAction | DeleteCustomerAction,
+): Promise<string> {
+  if (action.type === "customer.upsert") {
+    await syncCustomer(database, action.data);
+    return action.data.id;
+  }
+
+  await deleteCustomerFromDatabase(database, action.data.id);
+  return action.data.id;
 }
 
 export async function getCustomerById(
@@ -335,6 +350,26 @@ export async function hardDeleteCustomer(ctx: PayKitContext, customerId: string)
   }
 
   await deleteCustomerFromDatabase(ctx.database, customerId);
+}
+
+export async function emitCustomerUpdated(ctx: PayKitContext, customerId: string): Promise<void> {
+  const subscriptions = await getCurrentSubscriptions(ctx.database, customerId);
+  const payload = { customerId, subscriptions };
+
+  try {
+    await ctx.options.on?.["customer.updated"]?.({
+      name: "customer.updated",
+      payload,
+    });
+    await ctx.options.on?.["*"]?.({
+      event: {
+        name: "customer.updated",
+        payload,
+      },
+    });
+  } catch (error) {
+    ctx.logger.error({ err: error }, "error in customer.updated event handler");
+  }
 }
 
 export async function listCustomers(

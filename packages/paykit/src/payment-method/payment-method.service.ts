@@ -1,10 +1,15 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 
+import type { PayKitContext } from "../core/context";
 import { generateId } from "../core/utils";
 import { findCustomerByProviderCustomerId } from "../customer/customer.service";
 import type { PayKitDatabase } from "../database";
 import { paymentMethod } from "../database/schema";
-import type { NormalizedPaymentMethod } from "../types/events";
+import type {
+  DeletePaymentMethodAction,
+  NormalizedPaymentMethod,
+  UpsertPaymentMethodAction,
+} from "../types/events";
 
 export async function getDefaultPaymentMethod(
   database: PayKitDatabase,
@@ -113,4 +118,29 @@ export async function deletePaymentMethodByProviderId(
         sql`${paymentMethod.providerData}->>'methodId' = ${input.providerMethodId}`,
       ),
     );
+}
+
+export async function applyPaymentMethodWebhookAction(
+  ctx: PayKitContext,
+  action: UpsertPaymentMethodAction | DeletePaymentMethodAction,
+): Promise<string | null> {
+  if (action.type === "payment_method.upsert") {
+    await syncPaymentMethodByProviderCustomer(ctx.database, {
+      paymentMethod: action.data.paymentMethod,
+      providerCustomerId: action.data.providerCustomerId,
+      providerId: ctx.provider.id,
+    });
+
+    const customerRow = await findCustomerByProviderCustomerId(ctx.database, {
+      providerCustomerId: action.data.providerCustomerId,
+      providerId: ctx.provider.id,
+    });
+    return customerRow?.id ?? null;
+  }
+
+  await deletePaymentMethodByProviderId(ctx.database, {
+    providerId: ctx.provider.id,
+    providerMethodId: action.data.providerMethodId,
+  });
+  return null;
 }

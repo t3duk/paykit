@@ -1,10 +1,11 @@
 import { and, eq, sql } from "drizzle-orm";
 
+import type { PayKitContext } from "../core/context";
 import { generateId } from "../core/utils";
 import { findCustomerByProviderCustomerId } from "../customer/customer.service";
 import type { PayKitDatabase } from "../database";
 import { invoice } from "../database/schema";
-import type { NormalizedPayment } from "../types/events";
+import type { NormalizedPayment, UpsertPaymentAction } from "../types/events";
 
 export async function syncPaymentByProviderCustomer(
   database: PayKitDatabase,
@@ -57,4 +58,21 @@ export async function syncPaymentByProviderCustomer(
     providerId: input.providerId,
     providerData,
   });
+}
+
+export async function applyPaymentWebhookAction(
+  ctx: PayKitContext,
+  action: UpsertPaymentAction,
+): Promise<string | null> {
+  await syncPaymentByProviderCustomer(ctx.database, {
+    payment: action.data.payment,
+    providerCustomerId: action.data.providerCustomerId,
+    providerId: ctx.provider.id,
+  });
+
+  const customerRow = await findCustomerByProviderCustomerId(ctx.database, {
+    providerCustomerId: action.data.providerCustomerId,
+    providerId: ctx.provider.id,
+  });
+  return customerRow?.id ?? null;
 }

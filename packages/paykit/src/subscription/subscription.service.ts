@@ -3,14 +3,26 @@ import { and, desc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { PayKitContext } from "../core/context";
 import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
 import { generateId } from "../core/utils";
-import { upsertProviderCustomer } from "../customer/customer.service";
+import {
+  findCustomerByProviderCustomerId,
+  upsertProviderCustomer,
+} from "../customer/customer.service";
 import type { PayKitDatabase } from "../database";
 import { entitlement, product, subscription } from "../database/schema";
 import { upsertInvoiceRecord } from "../invoice/invoice.service";
 import { getDefaultPaymentMethod } from "../payment-method/payment-method.service";
-import { getLatestProductWithPrice } from "../product/product.service";
+import {
+  getDefaultProductInGroup,
+  getLatestProductWithPrice,
+  getProductByProviderPriceId,
+} from "../product/product.service";
 import type { ProviderRequiredAction, ProviderSubscription } from "../providers/provider";
-import type { NormalizedSubscription } from "../types/events";
+import type {
+  DeleteSubscriptionAction,
+  NormalizedSubscription,
+  NormalizedWebhookEvent,
+  UpsertSubscriptionAction,
+} from "../types/events";
 import type { StoredSubscription } from "../types/models";
 import type { NormalizedPlanFeature } from "../types/schema";
 import type {
@@ -226,8 +238,364 @@ export async function finalizeCheckoutSubscription(
   });
 }
 
+export async function handleSubscribeCheckoutCompleted(
+  ctx: PayKitContext,
+  event: NormalizedWebhookEvent<"checkout.completed">,
+): Promise<string | null> {
+  if (event.payload.mode !== "subscription") {
+    return null;
+  }
+
+  const intent = event.payload.metadata?.paykit_intent;
+  if (intent !== "subscribe") {
+    return null;
+  }
+
+  const customerId = event.payload.metadata?.paykit_customer_id;
+  const planId = event.payload.metadata?.paykit_plan_id;
+  if (!customerId || !planId) {
+    throw PayKitError.from(
+      "BAD_REQUEST",
+      PAYKIT_ERROR_CODES.PROVIDER_WEBHOOK_INVALID,
+      "Subscribe checkout metadata is missing paykit_customer_id or paykit_plan_id",
+    );
+  }
+
+  const checkoutSubscription = event.payload.subscription ?? null;
+  if (!checkoutSubscription) {
+    throw PayKitError.from(
+      "BAD_REQUEST",
+      PAYKIT_ERROR_CODES.PROVIDER_WEBHOOK_INVALID,
+      "Subscribe checkout completion is missing subscription data",
+    );
+  }
+
+  const subCtx = await loadSubscribeContext(ctx, {
+    customerId,
+    planId,
+    successUrl: "https://paykit.invalid/checkout",
+  });
+  if (subCtx.storedPlan.providerPriceId !== checkoutSubscription.providerPriceId) {
+    throw PayKitError.from(
+      "BAD_REQUEST",
+      PAYKIT_ERROR_CODES.PROVIDER_WEBHOOK_INVALID,
+      `Checkout price mismatch for plan "${planId}"`,
+    );
+  }
+
+  await finalizeCheckoutSubscription(ctx, subCtx, {
+    invoice: event.payload.invoice ?? null,
+    subscription: checkoutSubscription,
+  });
+
+  return customerId;
+}
+
 function isSamePlan(subCtx: SubscribeContext): boolean {
   return subCtx.activeSubscription?.planId === subCtx.storedPlan.id;
+}
+
+function getSubscriptionEffectiveDate(input: {
+  currentPeriodEndAt?: Date | null;
+  currentPeriodStartAt?: Date | null;
+}): Date {
+  return input.currentPeriodStartAt ?? input.currentPeriodEndAt ?? new Date();
+}
+
+async function ensureScheduledDefaultPlan(
+  ctx: PayKitContext,
+  input: {
+    customerId: string;
+    group: string;
+    startsAt: Date;
+  },
+): Promise<void> {
+  const existingScheduled = await getScheduledSubscriptionsInGroup(ctx.database, {
+    customerId: input.customerId,
+    group: input.group,
+  });
+  if (existingScheduled.length > 0) {
+    return;
+  }
+
+  const defaultPlan = await getDefaultProductInGroup(ctx.database, input.group, ctx.provider.id);
+  if (!defaultPlan || defaultPlan.priceAmount !== null) {
+    return;
+  }
+
+  const normalizedPlan = ctx.plans.plans.find((plan) => plan.id === defaultPlan.id);
+  if (!normalizedPlan) {
+    return;
+  }
+
+  await insertSubscriptionRecord(ctx.database, {
+    customerId: input.customerId,
+    planFeatures: normalizedPlan.includes,
+    productInternalId: defaultPlan.internalId,
+    startedAt: input.startsAt,
+    status: "scheduled",
+  });
+}
+
+async function activateScheduledSubscriptionForGroup(
+  ctx: PayKitContext,
+  input: {
+    customerId: string;
+    productGroup: string;
+    productInternalId?: string | null;
+    subscriptionStatus: string;
+    subscriptionCurrentPeriodEndAt?: Date | null;
+    subscriptionCurrentPeriodStartAt?: Date | null;
+    providerId?: string | null;
+    providerData?: Record<string, unknown> | null;
+  },
+): Promise<string | null> {
+  const activationDate = getSubscriptionEffectiveDate({
+    currentPeriodEndAt: input.subscriptionCurrentPeriodEndAt,
+    currentPeriodStartAt: input.subscriptionCurrentPeriodStartAt,
+  });
+  const scheduledSubs = await getScheduledSubscriptionsInGroup(ctx.database, {
+    customerId: input.customerId,
+    group: input.productGroup,
+  });
+
+  const targetSub = scheduledSubs.find((scheduled) => {
+    if (scheduled.startedAt && scheduled.startedAt > activationDate) {
+      return false;
+    }
+
+    if (!input.productInternalId) {
+      return true;
+    }
+
+    return scheduled.productInternalId === input.productInternalId;
+  });
+
+  if (!targetSub) {
+    return null;
+  }
+
+  const activeSub = await getActiveSubscriptionInGroup(ctx.database, {
+    customerId: input.customerId,
+    group: input.productGroup,
+  });
+
+  if (activeSub && activeSub.id !== targetSub.id) {
+    await endSubscriptions(ctx.database, [activeSub.id], {
+      canceled: activeSub.canceled,
+      endedAt: activationDate,
+      status: "ended",
+    });
+  }
+
+  await activateScheduledSubscription(ctx.database, {
+    currentPeriodEndAt: input.subscriptionCurrentPeriodEndAt,
+    currentPeriodStartAt: input.subscriptionCurrentPeriodStartAt,
+    subscriptionId: targetSub.id,
+    startedAt: targetSub.startedAt ?? activationDate,
+    status: input.subscriptionStatus,
+    providerData: input.providerData,
+    providerId: input.providerId,
+  });
+
+  return targetSub.id;
+}
+
+export async function applySubscriptionWebhookAction(
+  ctx: PayKitContext,
+  action: UpsertSubscriptionAction | DeleteSubscriptionAction,
+): Promise<string | null> {
+  const customerRow = await findCustomerByProviderCustomerId(ctx.database, {
+    providerCustomerId: action.data.providerCustomerId,
+    providerId: ctx.provider.id,
+  });
+  if (!customerRow) {
+    return null;
+  }
+
+  if (action.type === "subscription.delete") {
+    const existingSub = await getSubscriptionByProviderSubscriptionId(ctx.database, {
+      providerId: ctx.provider.id,
+      providerSubscriptionId: action.data.providerSubscriptionId,
+    });
+    if (!existingSub) {
+      return customerRow.id;
+    }
+
+    const effectiveEndDate = existingSub.currentPeriodEndAt ?? new Date();
+
+    await endSubscriptions(ctx.database, [existingSub.id], {
+      canceled: true,
+      endedAt: effectiveEndDate,
+      status: "canceled",
+    });
+
+    const existingStoredProduct = await ctx.database.query.product.findFirst({
+      where: eq(product.internalId, existingSub.productInternalId),
+    });
+    const productGroup = existingStoredProduct?.group ?? "";
+
+    if (productGroup) {
+      const effectiveDate = existingSub.currentPeriodEndAt ?? new Date();
+
+      await ensureScheduledDefaultPlan(ctx, {
+        customerId: customerRow.id,
+        group: productGroup,
+        startsAt: effectiveDate,
+      });
+
+      await activateScheduledSubscriptionForGroup(ctx, {
+        customerId: customerRow.id,
+        productGroup,
+        subscriptionCurrentPeriodEndAt: null,
+        subscriptionCurrentPeriodStartAt: effectiveDate,
+        subscriptionStatus: "active",
+      });
+    }
+
+    return customerRow.id;
+  }
+
+  const existingSub = await getSubscriptionByProviderSubscriptionId(ctx.database, {
+    providerId: ctx.provider.id,
+    providerSubscriptionId: action.data.subscription.providerSubscriptionId,
+  });
+  const storedProduct = action.data.subscription.providerPriceId
+    ? await getProductByProviderPriceId(ctx.database, {
+        providerId: ctx.provider.id,
+        providerPriceId: action.data.subscription.providerPriceId,
+      })
+    : null;
+  const normalizedPlan = storedProduct
+    ? ctx.plans.plans.find((plan) => plan.id === storedProduct.id)
+    : null;
+
+  const providerData = {
+    subscriptionId: action.data.subscription.providerSubscriptionId,
+  };
+
+  const targetSub =
+    existingSub ??
+    (storedProduct && normalizedPlan
+      ? await insertSubscriptionRecord(ctx.database, {
+          currentPeriodEndAt: action.data.subscription.currentPeriodEndAt ?? null,
+          currentPeriodStartAt: action.data.subscription.currentPeriodStartAt ?? null,
+          customerId: customerRow.id,
+          planFeatures: normalizedPlan.includes,
+          productInternalId: storedProduct.internalId,
+          providerData,
+          providerId: ctx.provider.id,
+          startedAt: action.data.subscription.currentPeriodStartAt ?? new Date(),
+          status: action.data.subscription.status,
+        })
+      : null);
+
+  if (!targetSub) {
+    return customerRow.id;
+  }
+
+  await syncSubscriptionFromProvider(ctx.database, {
+    providerSubscription: action.data.subscription,
+    subscriptionId: targetSub.id,
+  });
+
+  await syncSubscriptionBillingState(ctx.database, {
+    providerData,
+    subscriptionId: targetSub.id,
+  });
+
+  const isGenuineResume =
+    storedProduct &&
+    existingSub?.cancelAtPeriodEnd &&
+    !action.data.subscription.cancelAtPeriodEnd &&
+    !action.data.subscription.providerSubscriptionScheduleId;
+
+  if (isGenuineResume) {
+    await deleteScheduledSubscriptionsInGroup(ctx.database, {
+      customerId: customerRow.id,
+      group: storedProduct.group,
+    });
+
+    const activeSub = await getActiveSubscriptionInGroup(ctx.database, {
+      customerId: customerRow.id,
+      group: storedProduct.group,
+    });
+    if (activeSub) {
+      await replaceSubscriptionSchedule(ctx.database, {
+        scheduledProductId: null,
+        subscriptionId: activeSub.id,
+      });
+    }
+  }
+
+  if (storedProduct) {
+    const activeSub = await getActiveSubscriptionInGroup(ctx.database, {
+      customerId: customerRow.id,
+      group: storedProduct.group,
+    });
+
+    const subStatus = action.data.subscription.status;
+    const isTerminal = subStatus === "canceled" || subStatus === "ended" || subStatus === "unpaid";
+
+    if (action.data.subscription.cancelAtPeriodEnd && activeSub) {
+      await scheduleSubscriptionCancellation(ctx.database, {
+        canceledAt: action.data.subscription.canceledAt ?? new Date(),
+        currentPeriodEndAt:
+          action.data.subscription.currentPeriodEndAt ?? activeSub.currentPeriodEndAt,
+        subscriptionId: activeSub.id,
+      });
+
+      await ensureScheduledDefaultPlan(ctx, {
+        customerId: customerRow.id,
+        group: storedProduct.group,
+        startsAt:
+          action.data.subscription.currentPeriodEndAt ?? activeSub.currentPeriodEndAt ?? new Date(),
+      });
+    }
+
+    if (isTerminal && activeSub) {
+      const effectiveDate = action.data.subscription.currentPeriodEndAt ?? new Date();
+
+      await endSubscriptions(ctx.database, [activeSub.id], {
+        canceled: true,
+        endedAt: effectiveDate,
+        status: "canceled",
+      });
+
+      await ensureScheduledDefaultPlan(ctx, {
+        customerId: customerRow.id,
+        group: storedProduct.group,
+        startsAt: effectiveDate,
+      });
+
+      await activateScheduledSubscriptionForGroup(ctx, {
+        customerId: customerRow.id,
+        productGroup: storedProduct.group,
+        subscriptionCurrentPeriodStartAt: effectiveDate,
+        subscriptionStatus: "active",
+      });
+    } else {
+      const activatedSubId = await activateScheduledSubscriptionForGroup(ctx, {
+        customerId: customerRow.id,
+        productGroup: storedProduct.group,
+        productInternalId: storedProduct.internalId,
+        providerData,
+        providerId: ctx.provider.id,
+        subscriptionCurrentPeriodEndAt: action.data.subscription.currentPeriodEndAt,
+        subscriptionCurrentPeriodStartAt: action.data.subscription.currentPeriodStartAt,
+        subscriptionStatus: action.data.subscription.status,
+      });
+
+      if (activatedSubId) {
+        await syncSubscriptionFromProvider(ctx.database, {
+          providerSubscription: action.data.subscription,
+          subscriptionId: activatedSubId,
+        });
+      }
+    }
+  }
+
+  return customerRow.id;
 }
 
 function getProviderSubscriptionId(subscription: ActiveSubscription): string | null {
