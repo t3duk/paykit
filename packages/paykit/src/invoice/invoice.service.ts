@@ -1,11 +1,13 @@
 import { and, eq, sql } from "drizzle-orm";
 
+import type { PayKitContext } from "../core/context";
 import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
 import { generateId } from "../core/utils";
+import { findCustomerByProviderCustomerId } from "../customer/customer.service";
 import type { PayKitDatabase } from "../database";
-import { invoice } from "../database/schema";
+import { invoice, subscription } from "../database/schema";
 import type { ProviderInvoice } from "../providers/provider";
-import type { NormalizedInvoice } from "../types/events";
+import type { NormalizedInvoice, UpsertInvoiceAction } from "../types/events";
 import type { StoredInvoice } from "../types/models";
 
 export async function upsertInvoiceRecord(
@@ -70,4 +72,34 @@ export async function upsertInvoiceRecord(
     throw PayKitError.from("INTERNAL_SERVER_ERROR", PAYKIT_ERROR_CODES.INVOICE_UPSERT_FAILED);
   }
   return row;
+}
+
+export async function applyInvoiceWebhookAction(
+  ctx: PayKitContext,
+  action: UpsertInvoiceAction,
+): Promise<string | null> {
+  const customerRow = await findCustomerByProviderCustomerId(ctx.database, {
+    providerCustomerId: action.data.providerCustomerId,
+    providerId: ctx.provider.id,
+  });
+  if (!customerRow) {
+    return null;
+  }
+
+  const subscriptionRecord = action.data.providerSubscriptionId
+    ? await ctx.database.query.subscription.findFirst({
+        where: and(
+          eq(subscription.providerId, ctx.provider.id),
+          sql`${subscription.providerData}->>'subscriptionId' = ${action.data.providerSubscriptionId}`,
+        ),
+      })
+    : null;
+
+  await upsertInvoiceRecord(ctx.database, {
+    customerId: customerRow.id,
+    invoice: action.data.invoice,
+    providerId: ctx.provider.id,
+    subscriptionId: subscriptionRecord?.id ?? null,
+  });
+  return customerRow.id;
 }
