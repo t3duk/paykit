@@ -22,18 +22,18 @@ type FeatureIdFromOptions<TOptions extends PayKitOptions> = [
   ? string
   : FeatureIdFromPlans<TOptions["plans"]>;
 
-export type PayKitSubscribeInput<TOptions extends PayKitOptions = PayKitOptions> = {
+export type PayKitClientSubscribeInput<TOptions extends PayKitOptions = PayKitOptions> = {
   planId: PlanIdFromOptions<TOptions>;
   successUrl?: string;
   cancelUrl?: string;
-  customerId?: string;
   forceCheckout?: boolean;
 };
 
-export type PayKitClientSubscribeInput<TOptions extends PayKitOptions = PayKitOptions> = Omit<
-  PayKitSubscribeInput<TOptions>,
-  "customerId"
->;
+export type PayKitSubscribeInput<TOptions extends PayKitOptions = PayKitOptions> =
+  PayKitClientSubscribeInput<TOptions> & {
+    customerId: string;
+    successUrl: string;
+  };
 
 export interface PayKitSubscribeResult {
   invoice?: {
@@ -58,12 +58,14 @@ export interface PayKitCustomerInput {
   metadata?: Record<string, string>;
 }
 
-export interface PayKitCustomerPortalInput {
+export interface PayKitClientCustomerPortalInput {
   returnUrl?: string;
-  customerId?: string;
 }
 
-export type PayKitClientCustomerPortalInput = Omit<PayKitCustomerPortalInput, "customerId">;
+export interface PayKitCustomerPortalInput extends PayKitClientCustomerPortalInput {
+  customerId: string;
+  returnUrl: string;
+}
 
 export interface PayKitListCustomersInput {
   limit?: number;
