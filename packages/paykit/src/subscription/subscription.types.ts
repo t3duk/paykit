@@ -1,20 +1,21 @@
 import * as z from "zod";
 
+import { returnUrl } from "../api/define-route";
 import type { PayKitSubscribeResult } from "../types/instance";
 import type { StoredSubscription } from "../types/models";
 
 export const subscribeBodySchema = z.object({
   planId: z.string(),
-  successUrl: z.url().optional(),
-  cancelUrl: z.url().optional(),
-  customerId: z.string().optional(),
   forceCheckout: z.boolean().optional(),
+  successUrl: returnUrl(),
+  cancelUrl: returnUrl().optional(),
 });
 
 export type SubscribeBody = z.infer<typeof subscribeBodySchema>;
 
-export type SubscribeInput = Required<Pick<SubscribeBody, "customerId" | "successUrl">> &
-  Omit<SubscribeBody, "customerId" | "successUrl">;
+export type SubscribeInput = SubscribeBody & {
+  customerId: string;
+};
 
 export type SubscribeResult = PayKitSubscribeResult;
 

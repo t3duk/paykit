@@ -111,8 +111,8 @@ export function SubscribePanel() {
     mutationFn: async ({ planId }: { planId: SubscribePlanId }) => {
       const result = await paykitClient.subscribe({
         planId,
-        successUrl: `${window.location.origin}/?checkout=success`,
-        cancelUrl: `${window.location.origin}/?checkout=canceled`,
+        successUrl: `/?checkout=success`,
+        cancelUrl: `/?checkout=canceled`,
       });
       return { planId, result };
     },

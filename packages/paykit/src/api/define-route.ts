@@ -62,9 +62,9 @@ export interface PayKitMethodConfig {
 
 type InferSchemaInput<TSchema> = TSchema extends { _output: infer TOutput } ? TOutput : never;
 
-const returnUrlBrand = Symbol.for("paykit.return_url");
+const returnUrlBrand = "__paykitReturnUrl";
 
-type ReturnUrlSchema = z.ZodString & { [returnUrlBrand]: true };
+export type PayKitReturnUrlSchema = z.ZodURL & { __paykitReturnUrl: true };
 
 type InferMethodInput<TConfig extends PayKitMethodConfig> = TConfig["input"] extends undefined
   ? TConfig["route"] extends { resolveInput: (...args: unknown[]) => infer TResolved }
@@ -77,33 +77,14 @@ type InferRequireCustomer<TConfig extends PayKitMethodConfig> =
 
 type ServerMethodInput<TConfig extends PayKitMethodConfig> =
   InferRequireCustomer<TConfig> extends true
-    ? AddCustomerId<RequireServerReturnUrlFields<InferMethodInput<TConfig>, TConfig["input"]>>
-    : RequireServerReturnUrlFields<InferMethodInput<TConfig>, TConfig["input"]>;
+    ? AddCustomerId<InferMethodInput<TConfig>>
+    : InferMethodInput<TConfig>;
 
 type AddCustomerId<TInput> = TInput extends undefined
-  ? { customerId?: string } | undefined
+  ? { customerId: string }
   : TInput extends object
-    ? TInput & { customerId?: string }
+    ? TInput & { customerId: string }
     : TInput;
-
-type UnwrapReturnUrlSchema<TSchema> =
-  TSchema extends z.ZodOptional<infer TInner> ? UnwrapReturnUrlSchema<TInner> : TSchema;
-
-type ReturnUrlKeys<TSchema> =
-  TSchema extends z.ZodObject<infer TShape, any>
-    ? {
-        [K in keyof TShape]-?: UnwrapReturnUrlSchema<TShape[K]> extends ReturnUrlSchema ? K : never;
-      }[keyof TShape]
-    : never;
-
-type ServerRequiredReturnUrlKeys<TSchema> = Exclude<ReturnUrlKeys<TSchema>, "cancelUrl">;
-
-type RequireFields<TInput, TKeys extends keyof TInput> = Omit<TInput, TKeys> &
-  Required<Pick<TInput, TKeys>>;
-
-type RequireServerReturnUrlFields<TInput, TSchema> = TInput extends object
-  ? RequireFields<TInput, Extract<ServerRequiredReturnUrlKeys<TSchema>, keyof TInput>>
-  : TInput;
 
 type BetterCallEndpointContext = EndpointContext<
   string,
@@ -240,8 +221,15 @@ export function definePayKitMethod<const TConfig extends PayKitMethodConfig, TRe
   return call as PayKitMethod<ServerMethodInput<TConfig>, TResult>;
 }
 
-export function returnUrl(): ReturnUrlSchema {
-  return z.string().url().meta({ paykit: "returnUrl" }) as ReturnUrlSchema;
+export function returnUrl(): PayKitReturnUrlSchema {
+  const schema = z.url();
+  Object.defineProperty(schema, returnUrlBrand, {
+    configurable: false,
+    enumerable: false,
+    value: true,
+    writable: false,
+  });
+  return schema as PayKitReturnUrlSchema;
 }
 
 function getInputCustomerId(input: unknown): string | undefined {
@@ -308,34 +296,38 @@ function createRouteInputSchema(schema: PayKitMethodConfig["input"]) {
       continue;
     }
 
-    overrides[key] = createRoutedReturnUrlSchema(fieldSchema);
+    overrides[key] = createRoutedReturnUrlSchema(key, fieldSchema);
   }
 
   return Object.keys(overrides).length > 0 ? schema.extend(overrides) : schema;
 }
 
-function createRoutedReturnUrlSchema(schema: z.ZodTypeAny): z.ZodTypeAny {
-  if (schema instanceof z.ZodOptional) {
-    return createRoutedReturnUrlSchema(schema.unwrap()).optional();
+function createRoutedReturnUrlSchema(field: string, schema: unknown): z.ZodTypeAny {
+  const typedSchema = schema as z.ZodTypeAny;
+  if (typedSchema instanceof z.ZodOptional) {
+    return createRoutedReturnUrlSchema(field, typedSchema.unwrap()).optional();
   }
 
-  return z.string().refine((value) => isAbsoluteUrl(value) || isAbsolutePath(value), {
+  const routedSchema = z.string().refine((value) => isAbsoluteUrl(value) || isAbsolutePath(value), {
     message: "Invalid URL",
   });
+
+  return shouldDefaultReturnUrlField(field) ? routedSchema.optional() : routedSchema;
 }
 
 function getReturnUrlFields(schema: z.ZodObject<any>): string[] {
-  return Object.entries(schema.shape)
+  return (Object.entries(schema.shape) as Array<[string, unknown]>)
     .filter(([, fieldSchema]) => isReturnUrlSchema(fieldSchema))
     .map(([field]) => field);
 }
 
-function isReturnUrlSchema(schema: z.ZodTypeAny): boolean {
-  if (schema instanceof z.ZodOptional) {
-    return isReturnUrlSchema(schema.unwrap());
+function isReturnUrlSchema(schema: unknown): boolean {
+  const typedSchema = schema as z.ZodTypeAny;
+  if (typedSchema instanceof z.ZodOptional) {
+    return isReturnUrlSchema(typedSchema.unwrap());
   }
 
-  return schema.meta?.()?.paykit === "returnUrl";
+  return (typedSchema as Partial<PayKitReturnUrlSchema>)[returnUrlBrand] === true;
 }
 
 function normalizeReturnUrlValue(

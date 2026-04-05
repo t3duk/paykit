@@ -72,4 +72,4 @@ export type { PayKitErrorCode } from "./core/errors";
 export { defineErrorCodes } from "./core/error-codes";
 export type { RawError } from "./core/error-codes";
 export { feature, plan } from "./types/schema";
-export { createPayKitEndpoint, definePayKitMethod } from "./api/define-route";
+export { createPayKitEndpoint, definePayKitMethod, returnUrl } from "./api/define-route";

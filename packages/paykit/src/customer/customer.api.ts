@@ -1,6 +1,6 @@
 import * as z from "zod";
 
-import { definePayKitMethod } from "../api/define-route";
+import { definePayKitMethod, returnUrl } from "../api/define-route";
 import { PayKitError, PAYKIT_ERROR_CODES } from "../core/errors";
 import {
   getCustomerWithDetails,
@@ -29,22 +29,6 @@ const listCustomersSchema = z
   })
   .optional();
 
-function resolveReturnUrl(request: Request | undefined, explicitReturnUrl?: string): string {
-  if (explicitReturnUrl) {
-    return explicitReturnUrl;
-  }
-
-  if (!request) {
-    throw PayKitError.from(
-      "BAD_REQUEST",
-      PAYKIT_ERROR_CODES.SUCCESS_URL_REQUIRED,
-      "A returnUrl is required when openCustomerPortal is called without a request context",
-    );
-  }
-
-  return new URL("/", request.url).toString();
-}
-
 export const upsertCustomer = definePayKitMethod({ input: upsertCustomerSchema }, async (ctx) =>
   syncCustomerWithDefaults(ctx.paykit, ctx.input),
 );
@@ -66,7 +50,7 @@ export const listCustomersMethod = definePayKitMethod({ input: listCustomersSche
 export const customerPortal = definePayKitMethod(
   {
     input: z.object({
-      returnUrl: z.string().url().optional(),
+      returnUrl: returnUrl(),
     }),
     requireCustomer: true,
     route: {
@@ -87,7 +71,7 @@ export const customerPortal = definePayKitMethod(
 
     const { url } = await ctx.paykit.stripe.createPortalSession({
       providerCustomerId,
-      returnUrl: resolveReturnUrl(ctx.request, ctx.input.returnUrl),
+      returnUrl: ctx.input.returnUrl,
     });
 
     return { url };
