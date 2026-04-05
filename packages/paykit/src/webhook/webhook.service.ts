@@ -9,8 +9,9 @@ import { applyInvoiceWebhookAction } from "../invoice/invoice.service";
 import { applyPaymentMethodWebhookAction } from "../payment-method/payment-method.service";
 import { applyPaymentWebhookAction } from "../payment/payment.service";
 import {
-  applySubscriptionWebhookAction,
   handleSubscribeCheckoutCompleted,
+  applySubscriptionWebhookAction,
+  prepareSubscribeCheckoutCompleted,
 } from "../subscription/subscription.service";
 import type { AnyNormalizedWebhookEvent, WebhookApplyAction } from "../types/events";
 
@@ -137,6 +138,7 @@ async function processWebhookEvent(
   providerEventId: string,
   startTime: number,
 ): Promise<void> {
+  // Record the webhook outside the business transaction so failures are preserved.
   const shouldProcess = await beginWebhookEvent(ctx, {
     payload: event.payload as Record<string, unknown>,
     providerEventId,
@@ -148,12 +150,18 @@ async function processWebhookEvent(
   }
 
   try {
+    // Provider calls must happen before the DB transaction opens.
+    const checkoutCompletion =
+      event.name === "checkout.completed"
+        ? await prepareSubscribeCheckoutCompleted(ctx, event)
+        : null;
+
     const customerIds = await ctx.database.transaction(async (tx) => {
       const txCtx = { ...ctx, database: tx } as PayKitContext;
       const ids = new Set<string>();
 
-      if (event.name === "checkout.completed") {
-        const customerId = await handleSubscribeCheckoutCompleted(txCtx, event);
+      if (checkoutCompletion) {
+        const customerId = await handleSubscribeCheckoutCompleted(txCtx, checkoutCompletion);
         if (customerId) {
           ids.add(customerId);
         }
