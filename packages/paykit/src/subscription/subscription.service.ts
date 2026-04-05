@@ -172,76 +172,98 @@ function buildSubscribeResult(input: {
   };
 }
 
-export async function finalizeCheckoutSubscription(
-  ctx: PayKitContext,
-  subCtx: SubscribeContext,
-  input: {
-    invoice?: Parameters<typeof buildSubscribeResult>[0]["invoice"];
-    subscription: ProviderSubscription;
-  },
-): Promise<void> {
-  const activeSubscriptionRef = getProviderSubscriptionRef(subCtx.activeSubscription);
+interface SubscribeCheckoutCompletion {
+  customerId: string;
+  invoice?: Parameters<typeof buildSubscribeResult>[0]["invoice"];
+  subCtx: SubscribeContext;
+  subscription: ProviderSubscription;
+}
 
-  if (isSamePlan(subCtx)) {
-    if (activeSubscriptionRef.subscriptionId === input.subscription.providerSubscriptionId) {
+async function cancelExistingProviderSubscriptionForCheckout(
+  ctx: PayKitContext,
+  completion: SubscribeCheckoutCompletion,
+): Promise<void> {
+  const activeSubscriptionRef = getProviderSubscriptionRef(completion.subCtx.activeSubscription);
+
+  if (isSamePlan(completion.subCtx)) {
+    if (activeSubscriptionRef.subscriptionId === completion.subscription.providerSubscriptionId) {
       return;
     }
 
     throw PayKitError.from(
       "BAD_REQUEST",
       PAYKIT_ERROR_CODES.PROVIDER_WEBHOOK_INVALID,
-      `Checkout completed for plan "${subCtx.storedPlan.id}" after a different active subscription was already present`,
+      `Checkout completed for plan "${completion.subCtx.storedPlan.id}" after a different active subscription was already present`,
     );
   }
 
-  if (subCtx.activeSubscription && activeSubscriptionRef.subscriptionId) {
-    if (!subCtx.isUpgrade) {
-      throw PayKitError.from(
-        "BAD_REQUEST",
-        PAYKIT_ERROR_CODES.PROVIDER_WEBHOOK_INVALID,
-        `Checkout completion is only valid for new paid subscriptions or upgrades to "${subCtx.storedPlan.id}"`,
-      );
+  if (!completion.subCtx.activeSubscription || !activeSubscriptionRef.subscriptionId) {
+    return;
+  }
+
+  if (!completion.subCtx.isUpgrade) {
+    throw PayKitError.from(
+      "BAD_REQUEST",
+      PAYKIT_ERROR_CODES.PROVIDER_WEBHOOK_INVALID,
+      `Checkout completion is only valid for new paid subscriptions or upgrades to "${completion.subCtx.storedPlan.id}"`,
+    );
+  }
+
+  await ctx.stripe.cancelSubscription({
+    currentPeriodEndAt: completion.subCtx.activeSubscription.currentPeriodEndAt,
+    providerSubscriptionId: activeSubscriptionRef.subscriptionId,
+    providerSubscriptionScheduleId: activeSubscriptionRef.subscriptionScheduleId,
+  });
+}
+
+export async function applyCheckoutSubscription(
+  ctx: PayKitContext,
+  completion: SubscribeCheckoutCompletion,
+): Promise<void> {
+  const activeSubscriptionRef = getProviderSubscriptionRef(completion.subCtx.activeSubscription);
+
+  if (isSamePlan(completion.subCtx)) {
+    if (activeSubscriptionRef.subscriptionId === completion.subscription.providerSubscriptionId) {
+      return;
     }
 
-    await ctx.stripe.cancelSubscription({
-      currentPeriodEndAt: subCtx.activeSubscription.currentPeriodEndAt,
-      providerSubscriptionId: activeSubscriptionRef.subscriptionId,
-      providerSubscriptionScheduleId: activeSubscriptionRef.subscriptionScheduleId,
-    });
+    throw PayKitError.from(
+      "BAD_REQUEST",
+      PAYKIT_ERROR_CODES.PROVIDER_WEBHOOK_INVALID,
+      `Checkout completed for plan "${completion.subCtx.storedPlan.id}" after a different active subscription was already present`,
+    );
+  }
 
-    await ctx.database.transaction(async (tx) => {
-      await deleteScheduledSubscriptionsInGroupIfNeeded(tx, subCtx);
-      await endSubscriptions(tx, [subCtx.activeSubscription!.id], {
-        canceled: false,
-        endedAt: new Date(),
-        status: "ended",
-      });
-      await upsertProviderBackedTargetSubscription(tx, subCtx, input, {
-        deferred: true,
-      });
+  if (completion.subCtx.activeSubscription && activeSubscriptionRef.subscriptionId) {
+    await deleteScheduledSubscriptionsInGroupIfNeeded(ctx.database, completion.subCtx);
+    await endSubscriptions(ctx.database, [completion.subCtx.activeSubscription.id], {
+      canceled: false,
+      endedAt: new Date(),
+      status: "ended",
+    });
+    await upsertProviderBackedTargetSubscription(ctx.database, completion.subCtx, completion, {
+      deferred: true,
     });
     return;
   }
 
-  await ctx.database.transaction(async (tx) => {
-    if (subCtx.activeSubscription) {
-      await endSubscriptions(tx, [subCtx.activeSubscription.id], {
-        canceled: false,
-        endedAt: new Date(),
-        status: "ended",
-      });
-    }
-
-    await upsertProviderBackedTargetSubscription(tx, subCtx, input, {
-      deferred: true,
+  if (completion.subCtx.activeSubscription) {
+    await endSubscriptions(ctx.database, [completion.subCtx.activeSubscription.id], {
+      canceled: false,
+      endedAt: new Date(),
+      status: "ended",
     });
+  }
+
+  await upsertProviderBackedTargetSubscription(ctx.database, completion.subCtx, completion, {
+    deferred: true,
   });
 }
 
-export async function handleSubscribeCheckoutCompleted(
+export async function prepareSubscribeCheckoutCompleted(
   ctx: PayKitContext,
   event: NormalizedWebhookEvent<"checkout.completed">,
-): Promise<string | null> {
+): Promise<SubscribeCheckoutCompletion | null> {
   if (event.payload.mode !== "subscription") {
     return null;
   }
@@ -283,12 +305,25 @@ export async function handleSubscribeCheckoutCompleted(
     );
   }
 
-  await finalizeCheckoutSubscription(ctx, subCtx, {
+  const completion = {
+    customerId,
     invoice: event.payload.invoice ?? null,
+    subCtx,
     subscription: checkoutSubscription,
-  });
+  };
 
-  return customerId;
+  await cancelExistingProviderSubscriptionForCheckout(ctx, completion);
+
+  return completion;
+}
+
+export async function handleSubscribeCheckoutCompleted(
+  ctx: PayKitContext,
+  completion: SubscribeCheckoutCompletion,
+): Promise<string> {
+  await applyCheckoutSubscription(ctx, completion);
+
+  return completion.customerId;
 }
 
 function isSamePlan(subCtx: SubscribeContext): boolean {
