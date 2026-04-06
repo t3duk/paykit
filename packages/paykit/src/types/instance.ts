@@ -4,6 +4,7 @@ export type {
   CustomerWithDetails,
   ListCustomersResult,
 } from "../customer/customer.types";
+import type { PayKitContext } from "../core/context";
 import type { CustomerWithDetails, ListCustomersResult } from "../customer/customer.types";
 import type { CheckResult, ReportResult } from "../entitlement/entitlement.service";
 import type { Customer } from "./models";
@@ -100,6 +101,8 @@ export interface PayKitWebhookInput {
   headers: Record<string, string>;
 }
 
+export declare const payKitClientApiBrand: unique symbol;
+
 type PayKitMethod<TInput, TResult> = (input: TInput) => Promise<TResult>;
 
 type PayKitClientMethod<TPath extends string, TInput, TResult> = ((
@@ -108,6 +111,10 @@ type PayKitClientMethod<TPath extends string, TInput, TResult> = ((
   path: TPath;
   options: unknown;
 };
+
+export interface PayKitClientApiCarrier<TClientApi> {
+  readonly [payKitClientApiBrand]?: TClientApi;
+}
 
 export interface PayKitClientAPI<TOptions extends PayKitOptions = PayKitOptions> {
   subscribe: PayKitClientMethod<
@@ -136,14 +143,11 @@ export interface PayKitAPI<TOptions extends PayKitOptions = PayKitOptions> {
   handleWebhook: PayKitMethod<PayKitWebhookInput, { received: true }>;
 }
 
-export interface PayKitInstance<
-  TOptions extends PayKitOptions = PayKitOptions,
-> extends PayKitAPI<TOptions> {
+export interface PayKitInstance<TOptions extends PayKitOptions = PayKitOptions>
+  extends PayKitAPI<TOptions>, PayKitClientApiCarrier<PayKitClientAPI<TOptions>> {
   options: TOptions;
   handler: (request: Request) => Promise<Response>;
-  api: PayKitAPI<TOptions>;
-  $clientApi: PayKitClientAPI<TOptions>;
-  $context: Promise<unknown>;
+  $context: Promise<PayKitContext>;
   $infer: {
     planId: PlanIdFromOptions<TOptions>;
     featureId: FeatureIdFromOptions<TOptions>;
