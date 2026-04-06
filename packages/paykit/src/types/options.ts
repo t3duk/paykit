@@ -1,10 +1,15 @@
 import type { Pool } from "pg";
-import type { Logger } from "pino";
+import type { LevelWithSilent, Logger } from "pino";
 
 import type { StripeProviderConfig } from "../providers/provider";
 import type { PayKitEventHandlers } from "./events";
 import type { PayKitPlugin } from "./plugin";
 import type { PayKitPlansModule } from "./schema";
+
+export interface PayKitLoggingOptions {
+  level?: LevelWithSilent;
+  logger?: Logger;
+}
 
 export interface PayKitOptions {
   database: Pool | string;
@@ -18,5 +23,5 @@ export interface PayKitOptions {
   }>;
   on?: PayKitEventHandlers;
   plugins?: PayKitPlugin[];
-  logger?: Logger;
+  logging?: PayKitLoggingOptions;
 }

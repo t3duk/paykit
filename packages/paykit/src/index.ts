@@ -1,6 +1,6 @@
 export { createPayKit } from "./core/create-paykit";
 
-export type { PayKitOptions } from "./types/options";
+export type { PayKitLoggingOptions, PayKitOptions } from "./types/options";
 export type {
   CustomerEntitlement,
   CustomerSubscription,

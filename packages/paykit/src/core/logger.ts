@@ -1,10 +1,15 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import pino from "pino";
+import pretty from "pino-pretty";
 
+import type { PayKitLoggingOptions } from "../types/options";
 import { generateId } from "./utils";
 
 const storage = new AsyncLocalStorage<pino.Logger>();
+const PRETTY_LOG_IGNORE_FIELDS = "pid,hostname";
+const PRETTY_LOG_TIMESTAMP = "SYS:yyyy-mm-dd HH:MM:ss.l";
+const DEFAULT_LOG_LEVEL = "info";
 
 export interface PayKitInternalLogger extends pino.Logger {
   trace: pino.Logger["trace"] & {
@@ -12,17 +17,49 @@ export interface PayKitInternalLogger extends pino.Logger {
   };
 }
 
+export interface LoggerEnvironment {
+  isTTY?: boolean;
+  nodeEnv?: string;
+}
+
 export function getTraceId(): string | undefined {
   const bindings = storage.getStore()?.bindings();
   return bindings?.traceId as string | undefined;
 }
 
-export function createPayKitLogger(userLogger?: pino.Logger): PayKitInternalLogger {
+export function shouldUsePrettyLogs(environment: LoggerEnvironment = {}): boolean {
+  const { isTTY = process.stdout.isTTY, nodeEnv = process.env.NODE_ENV } = environment;
+  return isTTY === true && nodeEnv !== "production";
+}
+
+export function getDefaultLoggerOptions(
+  logging: Pick<PayKitLoggingOptions, "level"> | undefined,
+): pino.LoggerOptions {
+  return {
+    level: logging?.level ?? DEFAULT_LOG_LEVEL,
+    name: "paykit",
+    timestamp: pino.stdTimeFunctions.isoTime,
+  };
+}
+
+export function getPrettyLoggerOptions(): pretty.PrettyOptions {
+  return {
+    colorize: true,
+    ignore: PRETTY_LOG_IGNORE_FIELDS,
+    levelFirst: true,
+    translateTime: PRETTY_LOG_TIMESTAMP,
+  };
+}
+
+export function createPayKitLogger(
+  logging?: PayKitLoggingOptions,
+  environment: LoggerEnvironment = {},
+): PayKitInternalLogger {
   const base =
-    userLogger ??
-    pino({
-      name: "paykit",
-    });
+    logging?.logger ??
+    (shouldUsePrettyLogs(environment)
+      ? pino(getDefaultLoggerOptions(logging), pretty(getPrettyLoggerOptions()))
+      : pino(getDefaultLoggerOptions(logging)));
 
   const handler: ProxyHandler<pino.Logger> = {
     get(target, prop, receiver) {

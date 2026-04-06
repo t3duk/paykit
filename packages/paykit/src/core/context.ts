@@ -43,6 +43,6 @@ export async function createContext(options: PayKitOptions): Promise<PayKitConte
     provider: options.provider,
     stripe,
     plans: normalizeSchema(options.plans),
-    logger: createPayKitLogger(options.logger),
+    logger: createPayKitLogger(options.logging),
   };
 }
