@@ -226,7 +226,7 @@ describe("subscription lifecycle", () => {
       expect(sub).toBeDefined();
       const periodEnd = new Date(sub!.currentPeriodEndAt as unknown as string);
       const advanceTo = new Date(periodEnd.getTime() + 86_400_000);
-      await advanceTestClock(t.stripeClient, t.testClockId, advanceTo.toISOString().split("T")[0]!);
+      await advanceTestClock(t, customerId, advanceTo.toISOString().split("T")[0]!);
 
       // Poll DB until Free is active (real webhooks handle the transition)
       let activeFree: Awaited<ReturnType<typeof getCustomerProducts>>[0] | undefined;
@@ -288,7 +288,7 @@ describe("subscription lifecycle", () => {
       // Advance clock past period end — Stripe renews the subscription
       // and fires webhooks through stripe listen
       const advanceTo = new Date(periodEnd.getTime() + 86_400_000);
-      await advanceTestClock(t.stripeClient, t.testClockId, advanceTo.toISOString().split("T")[0]!);
+      await advanceTestClock(t, customerId, advanceTo.toISOString().split("T")[0]!);
 
       // Poll DB until period dates roll forward (real webhooks update them)
       let newPeriodEnd = periodEnd;

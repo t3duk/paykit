@@ -51,7 +51,7 @@ describe("resubscribe-after-cancel: checkout after full cancellation", () => {
       .limit(1);
     const periodEnd = new Date(subRows[0]!.currentPeriodEndAt as unknown as string);
     const advanceTo = new Date(periodEnd.getTime() + 86_400_000);
-    await advanceTestClock(t.stripeClient, t.testClockId, advanceTo.toISOString().split("T")[0]!);
+    await advanceTestClock(t, customerId, advanceTo.toISOString().split("T")[0]!);
 
     // Wait for Free to activate
     for (let i = 0; i < 60; i++) {

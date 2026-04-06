@@ -66,12 +66,27 @@ export const ultraPlan = plan({
   price: { amount: 200, interval: "month" },
 });
 
+type SmokePlans = {
+  free: typeof freePlan;
+  pro: typeof proPlan;
+  premium: typeof premiumPlan;
+  ultra: typeof ultraPlan;
+};
+
+type SmokePayKit = ReturnType<
+  typeof createPayKit<{
+    database: Pool;
+    plans: SmokePlans;
+    provider: ReturnType<typeof stripe>;
+    testing: { enabled: true };
+  }>
+>;
+
 export interface TestPayKit {
-  paykit: ReturnType<typeof createPayKit>;
+  paykit: SmokePayKit;
   database: PayKitDatabase;
   ctx: PayKitContext;
   stripeClient: Stripe;
-  testClockId: string;
   dbPath: string;
   server: Server;
   cleanup: () => Promise<void>;
@@ -105,32 +120,16 @@ export async function createTestPayKit(): Promise<TestPayKit> {
   // 2. Run migrations
   await migrateDatabase(pool);
 
-  // 3. Create test clock
-  const clock = await stripeClient.testHelpers.testClocks.create({
-    frozen_time: Math.floor(Date.now() / 1000),
-    name: `smoke-${String(Date.now())}`,
-  });
-
-  // 4. Create PayKit instance with real Stripe
+  // 3. Create PayKit instance with real Stripe
   const stripeProvider = stripe({ secretKey, webhookSecret });
   const paykit = createPayKit({
     database: pool,
     plans: { free: freePlan, pro: proPlan, premium: premiumPlan, ultra: ultraPlan },
     provider: stripeProvider,
+    testing: { enabled: true },
   });
 
   const ctx = await paykit.$context;
-
-  // Override upsertCustomer to attach test clock
-  ctx.stripe.upsertCustomer = async (data) => {
-    const customer = await stripeClient.customers.create({
-      email: data.email,
-      metadata: { customerId: data.id, ...data.metadata },
-      name: data.name,
-      test_clock: clock.id,
-    });
-    return { providerCustomerId: customer.id };
-  };
 
   // Override createSubscription to use allow_incomplete. The default
   // payment_behavior: "default_incomplete" requires client-side payment
@@ -180,11 +179,11 @@ export async function createTestPayKit(): Promise<TestPayKit> {
     };
   };
 
-  // 5. Start webhook server BEFORE syncing products — product sync
+  // 4. Start webhook server BEFORE syncing products — product sync
   // creates Stripe products which fires webhooks immediately
   const server = startWebhookServer(paykit);
 
-  // 6. Sync products to Stripe
+  // 5. Sync products to Stripe
   await syncProducts(ctx);
 
   return {
@@ -192,12 +191,26 @@ export async function createTestPayKit(): Promise<TestPayKit> {
     database: ctx.database,
     ctx,
     stripeClient,
-    testClockId: clock.id,
     dbPath: dbUrl,
     server,
     cleanup: async () => {
-      // Delete test clock first — Stripe fires cleanup webhooks
-      await stripeClient.testHelpers.testClocks.del(clock.id).catch(() => {});
+      const customerRows = await ctx.database.query.customer.findMany();
+      const testClockIds = new Set<string>();
+      for (const row of customerRows) {
+        const providerMap = (row.provider ?? {}) as Record<
+          string,
+          { id: string; testClockId?: string }
+        >;
+        const testClockId = providerMap.stripe?.testClockId;
+        if (testClockId) {
+          testClockIds.add(testClockId);
+        }
+      }
+
+      for (const testClockId of testClockIds) {
+        await stripeClient.testHelpers.testClocks.del(testClockId).catch(() => {});
+      }
+
       // Wait for cleanup webhooks to arrive and be processed
       await new Promise((resolve) => setTimeout(resolve, 10_000));
       server.close();
@@ -213,24 +226,15 @@ export async function createTestPayKit(): Promise<TestPayKit> {
 }
 
 /**
- * Creates a PayKit customer and subscribes to Free (triggers Stripe customer
- * creation on the test clock). No payment method attached — first paid
- * subscribe will go through checkout.
+ * Creates a PayKit customer. In testing mode this also provisions a Stripe
+ * customer with a dedicated test clock. No payment method attached — first
+ * paid subscribe will go through checkout.
  */
 export async function createTestCustomer(
   t: TestPayKit,
   input: { id: string; email: string; name: string },
 ): Promise<{ customerId: string; providerCustomerId: string }> {
-  // Create customer in PayKit DB
   await t.paykit.upsertCustomer(input);
-
-  // Subscribe to free plan — this triggers Stripe customer creation via
-  // our test clock override and assigns the default free plan
-  await t.paykit.subscribe({
-    customerId: input.id,
-    planId: "free",
-    successUrl: "https://example.com/success",
-  });
 
   // Now the provider customer ID is stored in the customer's provider JSONB column
   const row = await t.database.query.customer.findFirst({
@@ -549,7 +553,7 @@ export async function fakeCheckoutCompletion(
   }
 }
 
-function startWebhookServer(paykit: ReturnType<typeof createPayKit>): Server {
+function startWebhookServer(paykit: Pick<SmokePayKit, "handler">): Server {
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const chunks: Buffer[] = [];
     for await (const chunk of req) {
@@ -584,22 +588,14 @@ function startWebhookServer(paykit: ReturnType<typeof createPayKit>): Server {
 }
 
 export async function advanceTestClock(
-  stripeClient: Stripe,
-  testClockId: string,
+  t: TestPayKit,
+  customerId: string,
   toDate: string,
 ): Promise<void> {
-  const frozenTime = Math.floor(new Date(toDate).getTime() / 1000);
-  await stripeClient.testHelpers.testClocks.advance(testClockId, {
-    frozen_time: frozenTime,
+  await t.paykit.advanceTestClock({
+    customerId,
+    frozenTime: new Date(toDate),
   });
-
-  // Poll until clock is ready
-  for (let i = 0; i < 60; i++) {
-    const clock = await stripeClient.testHelpers.testClocks.retrieve(testClockId);
-    if (clock.status === "ready") return;
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-  }
-  throw new Error(`Test clock ${testClockId} did not reach 'ready' status`);
 }
 
 export async function waitForWebhook(

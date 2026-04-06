@@ -9,6 +9,7 @@ import { pool } from "@/server/db";
 import { free, pro, ultra } from "./plans";
 
 export const paykit = createPayKit({
+  testing: { enabled: true },
   database: pool,
   provider: stripe({
     secretKey: env.STRIPE_SECRET_KEY,

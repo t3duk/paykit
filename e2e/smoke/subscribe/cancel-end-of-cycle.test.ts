@@ -60,7 +60,7 @@ describe("cancel-end-of-cycle: pro → free + clock advance", () => {
 
       // Advance clock 1 day past period end
       const advanceTo = new Date(periodEnd.getTime() + 86_400_000);
-      await advanceTestClock(t.stripeClient, t.testClockId, advanceTo.toISOString().split("T")[0]!);
+      await advanceTestClock(t, customerId, advanceTo.toISOString().split("T")[0]!);
 
       // Poll until Free is active (real subscription.deleted webhook)
       for (let i = 0; i < 60; i++) {

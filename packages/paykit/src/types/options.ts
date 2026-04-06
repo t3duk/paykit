@@ -11,6 +11,10 @@ export interface PayKitLoggingOptions {
   logger?: Logger;
 }
 
+export interface PayKitTestingOptions {
+  enabled: true;
+}
+
 export interface PayKitOptions {
   database: Pool | string;
   provider: StripeProviderConfig;
@@ -24,4 +28,5 @@ export interface PayKitOptions {
   on?: PayKitEventHandlers;
   plugins?: PayKitPlugin[];
   logging?: PayKitLoggingOptions;
+  testing?: PayKitTestingOptions;
 }

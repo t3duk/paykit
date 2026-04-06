@@ -52,7 +52,7 @@ describe("renewal: pro subscription renews after 1 month", () => {
 
       // Advance clock 1 day past period end
       const advanceTo = new Date(periodEnd.getTime() + 86_400_000);
-      await advanceTestClock(t.stripeClient, t.testClockId, advanceTo.toISOString().split("T")[0]!);
+      await advanceTestClock(t, customerId, advanceTo.toISOString().split("T")[0]!);
 
       // Poll until period dates change (real subscription.updated webhook)
       let newPeriodEnd = periodEnd;
