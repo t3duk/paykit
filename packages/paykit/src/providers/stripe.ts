@@ -501,14 +501,14 @@ export function createStripeProvider(
 
   return {
     async upsertCustomer(data) {
-      let testClockId: string | undefined;
+      let testClock: ProviderTestClock | undefined;
       if (data.createTestClock) {
         assertStripeTestKey(options);
         const clock = await client.testHelpers.testClocks.create({
           frozen_time: Math.floor(Date.now() / 1000),
           name: data.id,
         });
-        testClockId = clock.id;
+        testClock = normalizeStripeTestClock(clock);
       }
 
       const customer = await client.customers.create({
@@ -518,13 +518,14 @@ export function createStripeProvider(
           ...data.metadata,
         },
         name: data.name,
-        test_clock: testClockId,
+        test_clock: testClock?.id,
       });
 
       return {
         providerCustomer: {
           id: customer.id,
-          testClockId,
+          frozenTime: testClock?.frozenTime.toISOString(),
+          testClockId: testClock?.id,
         },
       };
     },

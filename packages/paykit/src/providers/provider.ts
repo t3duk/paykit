@@ -1,6 +1,7 @@
 import type { NormalizedWebhookEvent } from "../types/events";
 
 export interface ProviderCustomer {
+  frozenTime?: string;
   id: string;
   testClockId?: string;
 }

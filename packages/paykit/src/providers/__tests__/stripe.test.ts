@@ -54,6 +54,7 @@ describe("providers/stripe", () => {
     });
     expect(result).toEqual({
       providerCustomer: {
+        frozenTime: expect.any(String),
         id: "cus_123",
         testClockId: "clock_123",
       },

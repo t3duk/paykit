@@ -21,9 +21,10 @@ function createCustomerRow(overrides: Partial<Customer> = {}): Customer {
 }
 
 function createUpdateChain(result: unknown) {
-  const where = vi.fn().mockResolvedValue(result);
+  const returning = vi.fn().mockResolvedValue(result);
+  const where = vi.fn().mockReturnValue({ returning });
   const set = vi.fn().mockReturnValue({ where });
-  return { set, where };
+  return { returning, set, where };
 }
 
 describe("customer/service", () => {
@@ -41,6 +42,7 @@ describe("customer/service", () => {
     const findFirst = vi
       .fn()
       .mockResolvedValueOnce(createCustomerRow())
+      .mockResolvedValueOnce(syncedCustomer)
       .mockResolvedValueOnce(syncedCustomer);
     const stripe = {
       advanceTestClock: vi.fn(),
@@ -61,6 +63,7 @@ describe("customer/service", () => {
       updateSubscription: vi.fn(),
       upsertCustomer: vi.fn().mockResolvedValue({
         providerCustomer: {
+          frozenTime: "2024-01-01T00:00:00.000Z",
           id: "cus_123",
           testClockId: "clock_123",
         },
@@ -116,6 +119,7 @@ describe("customer/service", () => {
     expect(providerUpdate.set).toHaveBeenCalledWith({
       provider: {
         stripe: {
+          frozenTime: expect.any(String),
           id: "cus_123",
           testClockId: "clock_123",
         },
