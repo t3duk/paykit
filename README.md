@@ -31,7 +31,7 @@
 
 ---
 
-# PayKit
+# 🛠️ PayKit
 
 **The first billing framework for TypeScript.** Define plans in code, sync with Stripe, gate features, track usage. Open source and runs inside your app. [Learn more](https://paykit.sh).
 
