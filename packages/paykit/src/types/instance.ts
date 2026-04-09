@@ -85,13 +85,7 @@ type RefineClientMethodInput<
     ? OmitCustomerId<TInput> extends { returnUrl: string }
       ? Omit<OmitCustomerId<TInput>, "returnUrl"> & { returnUrl?: string }
       : OmitCustomerId<TInput>
-    : TKey extends "check" | "report"
-      ? OmitCustomerId<TInput> extends { featureId: string }
-        ? Omit<OmitCustomerId<TInput>, "featureId"> & {
-            featureId: FeatureIdFromOptions<TOptions>;
-          }
-        : OmitCustomerId<TInput>
-      : OmitCustomerId<TInput>;
+    : OmitCustomerId<TInput>;
 
 export type PayKitClientSubscribeInput<TOptions extends PayKitOptions = PayKitOptions> =
   RefineClientMethodInput<TOptions, "subscribe", InferMethodInput<RegisteredMethods["subscribe"]>>;
@@ -144,14 +138,8 @@ export type PayKitAdvanceTestClockInput = RefineServerMethodInput<
 export type PayKitCheckInput<TOptions extends PayKitOptions = PayKitOptions> =
   RefineServerMethodInput<TOptions, "check", InferMethodInput<RegisteredMethods["check"]>>;
 
-export type PayKitClientCheckInput<TOptions extends PayKitOptions = PayKitOptions> =
-  RefineClientMethodInput<TOptions, "check", InferMethodInput<RegisteredMethods["check"]>>;
-
 export type PayKitReportInput<TOptions extends PayKitOptions = PayKitOptions> =
   RefineServerMethodInput<TOptions, "report", InferMethodInput<RegisteredMethods["report"]>>;
-
-export type PayKitClientReportInput<TOptions extends PayKitOptions = PayKitOptions> =
-  RefineClientMethodInput<TOptions, "report", InferMethodInput<RegisteredMethods["report"]>>;
 
 export type PayKitWebhookInput = InferMethodInput<RegisteredMethods["handleWebhook"]>;
 

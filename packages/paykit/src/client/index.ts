@@ -3,11 +3,17 @@ import { createFetch } from "@better-fetch/fetch";
 import type { clientMethods } from "../api/methods";
 import type { PayKitClientApiCarrier } from "../types/instance";
 
+type RequiresIdentify = {
+  options: { identify: (...args: never[]) => unknown };
+};
+
 export interface PayKitClientOptions {
   baseURL?: string;
 }
 
-export function createPayKitClient<Instance>(options?: PayKitClientOptions) {
+export function createPayKitClient<Instance extends RequiresIdentify>(
+  options?: PayKitClientOptions,
+) {
   const baseURL = options?.baseURL ?? "/paykit/api";
   const isCredentialsSupported =
     typeof globalThis.Request !== "undefined" && "credentials" in Request.prototype;
