@@ -8,6 +8,8 @@
     "---Flows---",
     "flows",
     "---Providers---",
-    "providers"
+    "providers",
+    "---Plugins---",
+    "plugins"
   ]
 }

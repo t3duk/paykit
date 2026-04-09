@@ -74,7 +74,6 @@ export function createPayKit<const TOptions extends PayKitOptions>(
     },
 
     $infer: undefined as never,
-    $hasIdentify: (options.identify !== undefined) as PayKitInstance<TOptions>["$hasIdentify"],
   };
 
   Object.defineProperty(paykit, payKitInstanceSymbol, {

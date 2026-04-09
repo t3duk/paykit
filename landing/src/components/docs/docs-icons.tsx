@@ -11,6 +11,7 @@ import {
   Download,
   Gauge,
   GitCompareArrows,
+  LayoutDashboard,
   Layers,
   Monitor,
   Plug,
@@ -38,6 +39,7 @@ const categoryIcons = {
   providers: <CreditCard className="docs-category-icon size-3.5! shrink-0" />,
   databases: <Database className="docs-category-icon size-3.5! shrink-0" />,
   integrations: <Blocks className="docs-category-icon size-3.5! shrink-0" />,
+  plugins: <Plug className="docs-category-icon size-3.5! shrink-0" />,
   guides: <BookMarked className="docs-category-icon size-3.5! shrink-0" />,
 } as const;
 
@@ -74,10 +76,11 @@ const pageIcons = {
   cli: <Terminal className="docs-category-icon size-3! shrink-0" />,
   "subscription billing": <Repeat className="docs-category-icon size-3! shrink-0" />,
   "metered usage": <Gauge className="docs-category-icon size-3! shrink-0" />,
+  dashboard: <LayoutDashboard className="docs-category-icon size-3! shrink-0" />,
 } as const;
 
 const enabledProviders = new Set(["stripe"]);
-const soonPages = new Set(["drizzleadapter", "prismaadapter"]);
+const soonPages = new Set(["drizzleadapter", "prismaadapter", "dashboard"]);
 
 const providerPageIcons = {
   stripe: (

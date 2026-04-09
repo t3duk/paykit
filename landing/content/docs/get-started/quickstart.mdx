@@ -31,7 +31,7 @@ Before a customer can subscribe, they need to exist in PayKit. Client side syncs
     // server.ts
     const paykit = createPayKit({
       // ...
-      // client's customer is identified here:
+      // client's customer is automatically identified here:
       identify: async ({ headers }) => {
         const session = await auth.api.getSession({ headers });
         if (!session) return null;
@@ -47,7 +47,7 @@ Before a customer can subscribe, they need to exist in PayKit. Client side syncs
     // client.ts
     const paykitClient = createPayKitClient<typeof paykit>();
 
-    // you don't need to pass `customerId` to purchase on client:
+    // so you don't need to pass `customerId` to purchase on client:
     await paykitClient.subscribe({ planId: "pro" })
 
     ```
@@ -77,48 +77,57 @@ To subscribe a customer to a plan, call `subscribe` with the plan ID. For paid p
     ```
   </Tab>
   <Tab value="Client">
-    ```ts title="client.ts"
+    ```tsx title="component.tsx"
     import { paykitClient } from "@/lib/paykit-client";
 
-    await paykitClient.subscribe({
-      planId: "pro",
-      successUrl: "/billing/success",
-      cancelUrl: "/billing",
-    });
+    <Button
+      onClick={async () => {
+        const { paymentUrl } = await paykitClient.subscribe({
+          planId: "pro",
+          successUrl: "/billing/success",
+          cancelUrl: "/billing",
+        });
+        if (paymentUrl) {
+          window.location.href = paymentUrl;
+        }
+      }}
+    >
+      Upgrade to Pro
+    </Button>
     ```
   </Tab>
 </Tabs>
 
 For free plans, the subscription activates immediately with no redirect.
 
-## Check entitlements
+## Usage billing
 
-Use `check` to verify whether a customer has access to a feature. This is a server-side operation since access control decisions must happen on the server.
+Use `check` to verify the customer has remaining balance, perform the action, then `report` to decrement usage. Both are server-side operations.
 
-```ts title="server.ts"
-const result = await paykit.check({
-  customerId: "user_123",
-  featureId: "pro_models",
-});
+```ts title="app/api/chat/route.ts"
+export async function POST(request: Request) {
+  const { allowed } = await paykit.check({
+    customerId: userId,
+    featureId: "messages",
+  });
 
-if (!result.allowed) {
-  // user does not have access
+  if (!allowed) {
+    return Response.json({ error: "Usage limit reached" }, { status: 403 });
+  }
+
+  const response = await generateChatResponse(input);
+
+  await paykit.report({
+    customerId: userId,
+    featureId: "messages",
+    amount: 1,
+  });
+
+  return Response.json(response);
 }
 ```
 
-For metered features, `check` also returns the current `balance` with `remaining`, `limit`, and `resetAt`.
-
-## Report usage
-
-For metered features, report usage as it happens. PayKit decrements the remaining balance and resets it on the plan's interval. Like `check`, this is a server-side operation.
-
-```ts title="server.ts"
-await paykit.report({
-  customerId: "user_123",
-  featureId: "messages",
-  amount: 1,
-});
-```
+For boolean features like `pro_models`, `check` returns `allowed` without any balance tracking.
 
 ## Listen to events
 

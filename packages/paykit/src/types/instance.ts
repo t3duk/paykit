@@ -205,5 +205,4 @@ export type PayKitInstance<TOptions extends PayKitOptions = PayKitOptions> = Pay
       planId: PlanIdFromOptions<TOptions>;
       featureId: FeatureIdFromOptions<TOptions>;
     };
-    $hasIdentify: TOptions extends { identify: (...args: never[]) => unknown } ? true : false;
   };
