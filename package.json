@@ -1,5 +1,6 @@
 {
   "name": "paykitjs-root",
+  "version": "0.1.0-alpha.1",
   "private": true,
   "description": "Open payments orchestration for modern SaaS",
   "repository": {
