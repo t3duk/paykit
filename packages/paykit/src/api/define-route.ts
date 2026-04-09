@@ -405,6 +405,10 @@ async function resolveCustomer(
   if (ctx.options.identify && request) {
     const identity = await ctx.options.identify(request);
 
+    if (!identity) {
+      throw PayKitError.from("UNAUTHORIZED", PAYKIT_ERROR_CODES.IDENTIFY_REQUIRED);
+    }
+
     if (explicitCustomerId && explicitCustomerId !== identity.customerId) {
       throw PayKitError.from("FORBIDDEN", PAYKIT_ERROR_CODES.CUSTOMER_ID_MISMATCH);
     }

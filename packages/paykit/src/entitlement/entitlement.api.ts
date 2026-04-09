@@ -17,11 +17,6 @@ export const check = definePayKitMethod(
   {
     input: entitlementCheckSchema,
     requireCustomer: true,
-    route: {
-      client: true,
-      method: "POST",
-      path: "/check",
-    },
   },
   async (ctx) =>
     checkEntitlement(ctx.paykit.database, {
@@ -35,11 +30,6 @@ export const report = definePayKitMethod(
   {
     input: entitlementReportSchema,
     requireCustomer: true,
-    route: {
-      client: true,
-      method: "POST",
-      path: "/report",
-    },
   },
   async (ctx) =>
     reportEntitlement(ctx.paykit.database, {

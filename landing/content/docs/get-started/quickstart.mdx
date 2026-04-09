@@ -1,11 +1,143 @@
 ---
 title: Quickstart
-description: Placeholder page for the first working PayKit integration.
+description: Getting started with PayKit.
 ---
 
-<Callout type="warn">
-  Placeholder page. This section exists to validate the docs structure and navigation.
-</Callout>
+This page assumes you have completed the [installation](/docs/get-started/installation) steps and have a running PayKit instance with plans defined.
 
-This page will document the first working setup, likely using Next.js, Stripe, and one complete
-billing loop.
+## Sync a customer
+
+Before a customer can subscribe, they need to exist in PayKit. Client side syncs them automatically, but on the server side you create them manually.
+
+<Tabs items={["Server", "Client"]}>
+  <Tab value="Server">
+    ```ts
+    // call upsertCustomer when the user is created, or before the purchase:
+  
+    await paykit.upsertCustomer({
+      id: "user_123", // user or organization id
+      email: "jane@example.com",
+      name: "Jane Doe",
+    });
+
+    // then, pass `customerId` to purchase:
+    await paykit.subscribe({ customerId: "user_123", planId: "pro" })
+    ```
+  </Tab>
+  <Tab value="Client">
+ 
+
+    ```ts  
+    // server.ts
+    const paykit = createPayKit({
+      // ...
+      // client's customer is identified here:
+      identify: async ({ headers }) => {
+        const session = await auth.api.getSession({ headers });
+        if (!session) return null;
+        
+        return {
+          customerId: session.user.id, // user or organization id
+          email: session.user.email,
+          name: session.user.name,
+        };
+      },
+    });
+    
+    // client.ts
+    const paykitClient = createPayKitClient<typeof paykit>();
+
+    // you don't need to pass `customerId` to purchase on client:
+    await paykitClient.subscribe({ planId: "pro" })
+
+    ```
+    
+  </Tab>
+</Tabs>
+
+The customer ID can be your app's own user ID, or an organization ID.
+
+## Subscribe to a plan
+
+To subscribe a customer to a plan, call `subscribe` with the plan ID. For paid plans without a saved payment method, it returns a `paymentUrl` pointing to the provider checkout.
+
+<Tabs items={["Server", "Client"]}>
+  <Tab value="Server">
+    ```ts title="server.ts"
+    const result = await paykit.subscribe({
+      customerId: "user_123",
+      planId: "pro",
+      successUrl: "https://myapp.com/billing/success",
+      cancelUrl: "https://myapp.com/billing",
+    });
+
+    if (result.paymentUrl) {
+      // redirect user to provider checkout
+    }
+    ```
+  </Tab>
+  <Tab value="Client">
+    ```ts title="client.ts"
+    import { paykitClient } from "@/lib/paykit-client";
+
+    await paykitClient.subscribe({
+      planId: "pro",
+      successUrl: "/billing/success",
+      cancelUrl: "/billing",
+    });
+    ```
+  </Tab>
+</Tabs>
+
+For free plans, the subscription activates immediately with no redirect.
+
+## Check entitlements
+
+Use `check` to verify whether a customer has access to a feature. This is a server-side operation since access control decisions must happen on the server.
+
+```ts title="server.ts"
+const result = await paykit.check({
+  customerId: "user_123",
+  featureId: "pro_models",
+});
+
+if (!result.allowed) {
+  // user does not have access
+}
+```
+
+For metered features, `check` also returns the current `balance` with `remaining`, `limit`, and `resetAt`.
+
+## Report usage
+
+For metered features, report usage as it happens. PayKit decrements the remaining balance and resets it on the plan's interval. Like `check`, this is a server-side operation.
+
+```ts title="server.ts"
+await paykit.report({
+  customerId: "user_123",
+  featureId: "messages",
+  amount: 1,
+});
+```
+
+## Listen to events
+
+To react to billing changes, add the `on` option to your PayKit instance. The `customer.updated` event fires after any subscription or entitlement change.
+
+```ts title="paykit.ts"
+export const paykit = createPayKit({
+  // ...
+  on: {  // [!code highlight]
+    "customer.updated": ({ payload }) => {  // [!code highlight]
+      console.log("billing changed for", payload.customerId);  // [!code highlight]
+    },  // [!code highlight]
+  },  // [!code highlight]
+});
+```
+
+## Next steps
+
+- [Plans & Features](/docs/concepts/plans-and-features) - plan groups, defaults, and feature types
+- [Subscriptions](/docs/concepts/subscriptions) - upgrade, downgrade, and cancellation behavior
+- [Entitlements](/docs/concepts/entitlements) - access checks and metered usage
+- [Stripe](/docs/providers/stripe) - provider configuration

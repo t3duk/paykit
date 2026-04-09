@@ -80,21 +80,11 @@ export type PayKitCheckInput<TOptions extends PayKitOptions = PayKitOptions> = {
   required?: number;
 };
 
-export type PayKitClientCheckInput<TOptions extends PayKitOptions = PayKitOptions> = Omit<
-  PayKitCheckInput<TOptions>,
-  "customerId"
->;
-
 export type PayKitReportInput<TOptions extends PayKitOptions = PayKitOptions> = {
   customerId: string;
   featureId: FeatureIdFromOptions<TOptions>;
   amount?: number;
 };
-
-export type PayKitClientReportInput<TOptions extends PayKitOptions = PayKitOptions> = Omit<
-  PayKitReportInput<TOptions>,
-  "customerId"
->;
 
 export interface PayKitWebhookInput {
   body: string;
@@ -127,8 +117,6 @@ export interface PayKitClientAPI<TOptions extends PayKitOptions = PayKitOptions>
     PayKitClientCustomerPortalInput,
     { url: string }
   >;
-  check: PayKitClientMethod<"/check", PayKitClientCheckInput<TOptions>, CheckResult>;
-  report: PayKitClientMethod<"/report", PayKitClientReportInput<TOptions>, ReportResult>;
 }
 
 export interface PayKitAPI<TOptions extends PayKitOptions = PayKitOptions> {

@@ -20,7 +20,7 @@ export interface PayKitOptions {
     customerId: string;
     email?: string;
     name?: string;
-  }>;
+  } | null>;
   on?: PayKitEventHandlers;
   plugins?: PayKitPlugin[];
   logging?: PayKitLoggingOptions;

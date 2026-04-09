@@ -25,9 +25,7 @@ export const paykit = createPayKit({
   ],
   identify: async (request) => {
     const session = await auth.api.getSession({ headers: request.headers });
-    if (!session) {
-      throw new Error("Not authenticated");
-    }
+    if (!session) return null;
     return {
       customerId: session.user.id,
       email: session.user.email,
