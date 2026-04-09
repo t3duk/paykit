@@ -230,7 +230,7 @@ export function NavigationBar({ stars }: { stars: number | null }) {
                   onClick={() => track("nav_clicked", { link: "github_star", location: "header" })}
                 >
                   <Github className="size-3.5" />
-                  {stars !== null && <span>GitHub</span>}
+                  <span>GitHub</span>
                 </Button>
               </div>
             </div>
