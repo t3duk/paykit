@@ -2,7 +2,7 @@
   <a name="readme-top"></a>
   <img
     src="landing/public/favicon/android-chrome-512x512.png"
-    height="200"
+    height="180"
   >
 </h3>
 
