@@ -1,6 +1,7 @@
 import * as z from "zod";
 
 import { definePayKitMethod } from "../api/define-route";
+import { getCustomerCurrentTime } from "../testing/testing.service";
 import { checkEntitlement, reportEntitlement } from "./entitlement.service";
 
 const entitlementCheckSchema = z.object({
@@ -22,6 +23,7 @@ export const check = definePayKitMethod(
     checkEntitlement(ctx.paykit.database, {
       customerId: ctx.customer.id,
       featureId: ctx.input.featureId,
+      now: getCustomerCurrentTime(ctx.paykit, ctx.customer),
       required: ctx.input.required,
     }),
 );
@@ -36,5 +38,6 @@ export const report = definePayKitMethod(
       amount: ctx.input.amount,
       customerId: ctx.customer.id,
       featureId: ctx.input.featureId,
+      now: getCustomerCurrentTime(ctx.paykit, ctx.customer),
     }),
 );

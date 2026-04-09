@@ -43,7 +43,7 @@ export function createPayKit<const TOptions extends PayKitOptions>(
     return contextPromise;
   };
 
-  const api = getApi<TOptions>(getContext) as PayKitAPI<TOptions>;
+  const api = getApi(getContext(), options) as unknown as PayKitAPI<TOptions>;
   const paykit: PayKitInstance<TOptions> = {
     options,
 
@@ -74,6 +74,7 @@ export function createPayKit<const TOptions extends PayKitOptions>(
     },
 
     $infer: undefined as never,
+    $hasIdentify: (options.identify !== undefined) as PayKitInstance<TOptions>["$hasIdentify"],
   };
 
   Object.defineProperty(paykit, payKitInstanceSymbol, {

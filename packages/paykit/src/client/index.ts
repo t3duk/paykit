@@ -65,9 +65,9 @@ type UnionToIntersection<U> = (U extends unknown ? (k: U) => void : never) exten
   ? I
   : never;
 
-type InferBody<E> = E extends (ctx: infer C) => unknown ? C : never;
+type InferBody<E> = E extends (input: infer TInput) => Promise<unknown> ? TInput : never;
 
-type InferReturn<E> = E extends (...args: never[]) => Promise<infer R> ? R : never;
+type InferReturn<E> = E extends (input: infer _TInput) => Promise<infer TResult> ? TResult : never;
 
 type InferClientAPI<Instance> =
   Instance extends PayKitClientApiCarrier<infer API>
