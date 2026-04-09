@@ -1,28 +1,32 @@
 import type { Pool } from "pg";
+import type { LevelWithSilent, Logger } from "pino";
 
 import type { StripeProviderConfig } from "../providers/provider";
 import type { PayKitEventHandlers } from "./events";
+import type { PayKitPlugin } from "./plugin";
 import type { PayKitPlansModule } from "./schema";
 
-export interface PayKitLogger {
-  debug: (message: string, ...args: unknown[]) => void;
-  info: (message: string, ...args: unknown[]) => void;
-  warn: (message: string, ...args: unknown[]) => void;
-  error: (message: string, ...args: unknown[]) => void;
+export interface PayKitLoggingOptions {
+  level?: LevelWithSilent;
+  logger?: Logger;
+}
+
+export interface PayKitTestingOptions {
+  enabled: true;
 }
 
 export interface PayKitOptions {
-  database: Pool;
+  database: Pool | string;
   provider: StripeProviderConfig;
   plans?: PayKitPlansModule;
   basePath?: string;
-  client?: {
-    identify?: (request: Request) => Promise<{
-      customerId: string;
-      email?: string;
-      name?: string;
-    }>;
-  };
+  identify?: (request: Request) => Promise<{
+    customerId: string;
+    email?: string;
+    name?: string;
+  } | null>;
   on?: PayKitEventHandlers;
-  logger?: PayKitLogger;
+  plugins?: PayKitPlugin[];
+  logging?: PayKitLoggingOptions;
+  testing?: PayKitTestingOptions;
 }

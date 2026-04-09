@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import * as z from "zod";
 
 const payKitFeatureSymbol = Symbol.for("paykit.feature");
@@ -104,12 +106,13 @@ export interface PayKitPlanConfig<TId extends string = string> {
   includes?: readonly PayKitFeatureInclude[];
   name?: string;
   price?: PlanPrice;
-  trial?: { days: number };
 }
 
 export type PayKitPlan<TConfig extends PayKitPlanConfig = PayKitPlanConfig> = Readonly<
   Omit<TConfig, "includes"> & {
-    includes: readonly PayKitFeatureInclude[];
+    includes: TConfig["includes"] extends readonly PayKitFeatureInclude[]
+      ? TConfig["includes"]
+      : readonly PayKitFeatureInclude[];
   }
 >;
 
@@ -123,6 +126,7 @@ export interface NormalizedPlanFeature {
 
 export interface NormalizedPlan {
   group: string;
+  hash: string;
   id: string;
   includes: readonly NormalizedPlanFeature[];
   isDefault: boolean;
@@ -140,12 +144,16 @@ export interface NormalizedFeature {
 export interface NormalizedSchema {
   features: readonly NormalizedFeature[];
   plans: readonly NormalizedPlan[];
+  planMap: ReadonlyMap<string, NormalizedPlan>;
 }
 
-export type PayKitPlansModule = Record<string, unknown>;
+export type PayKitPlansModule = readonly PayKitPlan[] | Record<string, unknown>;
 
-export type PlanIdFromPlans<TPlans> =
-  TPlans extends Record<PropertyKey, unknown>
+export type PlanIdFromPlans<TPlans> = TPlans extends readonly (infer TItem)[]
+  ? TItem extends PayKitPlan<PayKitPlanConfig<infer TId>>
+    ? TId
+    : never
+  : TPlans extends Record<PropertyKey, unknown>
     ? TPlans[keyof TPlans] extends infer TValue
       ? TValue extends { id: infer TId extends string }
         ? TValue extends PayKitPlan
@@ -153,6 +161,20 @@ export type PlanIdFromPlans<TPlans> =
           : never
         : never
       : never
+    : never;
+
+type ExtractFeatureIds<TPlan> = TPlan extends {
+  includes: readonly (infer TInclude)[];
+}
+  ? TInclude extends { feature: { id: infer TId extends string } }
+    ? TId
+    : never
+  : never;
+
+export type FeatureIdFromPlans<TPlans> = TPlans extends readonly (infer TItem)[]
+  ? ExtractFeatureIds<TItem>
+  : TPlans extends Record<PropertyKey, unknown>
+    ? ExtractFeatureIds<TPlans[keyof TPlans]>
     : never;
 
 function defineHiddenBrand(target: object, symbol: symbol): void {
@@ -274,9 +296,6 @@ export function plan<const TConfig extends PayKitPlanConfig>(config: TConfig): P
       includes: z.array(z.unknown()).optional(),
       name: planNameSchema.optional(),
       price: priceSchema.optional(),
-      trial: z
-        .object({ days: z.number().int().positive("Trial days must be a positive integer") })
-        .optional(),
     })
     .safeParse(config);
 
@@ -311,15 +330,34 @@ export function plan<const TConfig extends PayKitPlanConfig>(config: TConfig): P
   return Object.freeze(builtPlan);
 }
 
+export function computePlanHash(plan: Omit<NormalizedPlan, "hash">): string {
+  const payload = JSON.stringify({
+    group: plan.group,
+    isDefault: plan.isDefault,
+    priceAmount: plan.priceAmount,
+    priceInterval: plan.priceInterval,
+    features: plan.includes.map((f) => ({
+      id: f.id,
+      limit: f.limit,
+      resetInterval: f.resetInterval,
+      config: f.config,
+    })),
+  });
+  return createHash("sha256").update(payload).digest("hex").slice(0, 16);
+}
+
 export function normalizeSchema(plans: PayKitPlansModule | undefined): NormalizedSchema {
   if (!plans) {
     return {
       features: [],
       plans: [],
+      planMap: new Map(),
     };
   }
 
-  const exportedPlans = Object.values(plans).filter(isPayKitPlan);
+  const exportedPlans = Array.isArray(plans)
+    ? plans.filter(isPayKitPlan)
+    : Object.values(plans).filter(isPayKitPlan);
   const features = new Map<string, NormalizedFeature>();
   const defaultPlansByGroup = new Map<string, string>();
   const plansById = new Map<string, NormalizedPlan>();
@@ -378,20 +416,27 @@ export function normalizeSchema(plans: PayKitPlansModule | undefined): Normalize
       } satisfies NormalizedPlanFeature;
     });
 
-    plansById.set(exportedPlan.id, {
+    const sortedIncludes = [...includes].sort((left, right) => left.id.localeCompare(right.id));
+    const planData = {
       group,
       id: exportedPlan.id,
-      includes: [...includes].sort((left, right) => left.id.localeCompare(right.id)),
+      includes: sortedIncludes,
       isDefault,
       name: exportedPlan.name ?? deriveNameFromId(exportedPlan.id),
       priceAmount: exportedPlan.price ? Math.round(exportedPlan.price.amount * 100) : null,
       priceInterval: exportedPlan.price?.interval ?? null,
-      trialDays: exportedPlan.trial?.days ?? null,
-    });
+      trialDays: null,
+    };
+    plansById.set(exportedPlan.id, { ...planData, hash: computePlanHash(planData) });
   }
+
+  const sortedPlans = [...plansById.values()].sort((left, right) =>
+    left.id.localeCompare(right.id),
+  );
 
   return {
     features: [...features.values()].sort((left, right) => left.id.localeCompare(right.id)),
-    plans: [...plansById.values()].sort((left, right) => left.id.localeCompare(right.id)),
+    plans: sortedPlans,
+    planMap: plansById,
   };
 }
