@@ -2,24 +2,53 @@
 
 import { Command } from "commander";
 
-import { checkCommand } from "./commands/check";
-import { initCommand } from "./commands/init";
-import { pushCommand } from "./commands/push";
-import { telemetryCommand } from "./commands/telemetry";
-import { captureError, flush } from "./utils/telemetry";
+process.env.PAYKIT_CLI = "1";
 
-const program = new Command()
-  .name("paykitjs")
-  .description("CLI for PayKit")
-  .addCommand(checkCommand)
-  .addCommand(initCommand)
-  .addCommand(pushCommand)
-  .addCommand(telemetryCommand);
+const program = new Command().name("paykitjs").description("CLI for PayKit");
+
+const commandName = process.argv[2];
+
+switch (commandName) {
+  case "status": {
+    const { statusCommand } = await import("./commands/status");
+    program.addCommand(statusCommand);
+    break;
+  }
+  case "init": {
+    const { initCommand } = await import("./commands/init");
+    program.addCommand(initCommand);
+    break;
+  }
+  case "push": {
+    const { pushCommand } = await import("./commands/push");
+    program.addCommand(pushCommand);
+    break;
+  }
+  case "telemetry": {
+    const { telemetryCommand } = await import("./commands/telemetry");
+    program.addCommand(telemetryCommand);
+    break;
+  }
+  default: {
+    const [{ statusCommand }, { initCommand }, { pushCommand }, { telemetryCommand }] =
+      await Promise.all([
+        import("./commands/status"),
+        import("./commands/init"),
+        import("./commands/push"),
+        import("./commands/telemetry"),
+      ]);
+    program.addCommand(statusCommand);
+    program.addCommand(initCommand);
+    program.addCommand(pushCommand);
+    program.addCommand(telemetryCommand);
+  }
+}
 
 try {
   await program.parseAsync(process.argv);
 } catch (error) {
-  const command = process.argv[2] ?? "unknown";
+  const { captureError, flush } = await import("./utils/telemetry");
+  const command = commandName ?? "unknown";
   captureError(command, error);
 
   const message = error instanceof Error ? error.message : String(error);
@@ -27,5 +56,3 @@ try {
   await flush();
   process.exit(1);
 }
-
-await flush();

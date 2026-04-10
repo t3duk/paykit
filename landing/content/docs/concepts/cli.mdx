@@ -28,11 +28,11 @@ The command you'll run most often. It does two things:
 
 Run it on initial setup and again whenever you change your plan configuration.
 
-## `paykitjs check`
+## `paykitjs status`
 
-<PackageRun command="paykitjs check" />
+<PackageRun command="paykitjs status" />
 
-Validates your entire PayKit setup without making any changes. Useful in CI pipelines or when debugging a broken environment. It checks:
+Validates your entire PayKit setup without making any changes. Useful when debugging a broken environment. It checks:
 
 - Configuration file validity
 - Database connection
@@ -40,7 +40,9 @@ Validates your entire PayKit setup without making any changes. Useful in CI pipe
 - Provider API connectivity
 - Sync status between your config, database, and provider
 
-Any failures are reported with a clear message and exit code, so it integrates cleanly with CI.
+Pass `--throw` to exit with code 1 on failures, useful for CI pipelines:
+
+<PackageRun command="paykitjs status --throw" />
 
 ## `paykitjs telemetry`
 

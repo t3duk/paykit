@@ -17,7 +17,7 @@ export function isPayKitInstance(value: unknown): value is PayKitInstance {
 async function initContext(options: PayKitOptions): Promise<PayKitContext> {
   const ctx = await createContext(options);
 
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && !process.env.PAYKIT_CLI) {
     try {
       const results = await dryRunSyncProducts(ctx);
       const outOfSync = results.filter((r) => r.action !== "unchanged");
