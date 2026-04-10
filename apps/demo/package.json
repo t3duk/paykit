@@ -13,7 +13,8 @@
     "start": "next start",
     "paykitjs": "tsx --conditions=paykit-source ../../packages/paykit/src/cli/index.ts",
     "typecheck": "tsc --noEmit",
-    "push": "pnpm paykitjs push && pnpm dlx auth migrate"
+    "push": "pnpm paykitjs push && pnpm dlx auth migrate",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
     "@base-ui/react": "^1.2.0",
@@ -61,6 +62,8 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "atmn": "^1.1.8",
+    "drizzle-kit": "^0.31.5",
+    "drizzle-orm": "^0.45.1",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.0.15",
     "typescript": "^5.8.2"
