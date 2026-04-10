@@ -22,12 +22,15 @@ const brandAssets = {
 };
 
 export function BrandMenu() {
-  function copyAsSvg(asset: BrandAsset) {
-    void navigator.clipboard.writeText(brandAssets[asset]);
-
-    toast.success(`${asset} SVG code copied to clipboard.`, {
-      icon: <Code2 className="size-4" />,
-    });
+  async function copyAsSvg(asset: BrandAsset) {
+    try {
+      await navigator.clipboard.writeText(brandAssets[asset]);
+      toast.success(`${asset} SVG code copied to clipboard.`, {
+        icon: <Code2 className="size-4" />,
+      });
+    } catch {
+      toast.error("Failed to copy to clipboard.");
+    }
   }
 
   return (
