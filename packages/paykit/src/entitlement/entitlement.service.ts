@@ -196,12 +196,15 @@ export async function reportEntitlement(
   const amount = input.amount ?? 1;
   const now = input.now ?? new Date();
 
-  // Single CTE: read active rows, try deducting from one, return aggregated info
+  // Single CTE: read active rows with lazy-reset balances, try deducting from one
   const e = entitlement;
   const s = subscription;
   const result = await database.execute<ReportQueryRow>(sql`
     with active as (
-      select ${e.id} as id, ${e.balance} as balance, ${e.limit} as "limit",
+      select ${e.id} as id,
+             case when ${e.nextResetAt} <= ${now} and ${e.limit} is not null
+               then ${e.limit} else ${e.balance} end as balance,
+             ${e.limit} as "limit",
              ${e.nextResetAt} as next_reset_at
       from ${e}
       inner join ${s} on ${e.subscriptionId} = ${s.id}
@@ -219,6 +222,7 @@ export async function reportEntitlement(
         where balance >= ${amount} and "limit" is not null
         limit 1
       )
+      and ${e.balance} >= ${amount}
       and not exists (select 1 from active where "limit" is null)
       returning ${e.id} as id, ${e.balance} as balance
     )
@@ -284,36 +288,64 @@ async function reportEntitlementStacked(
   amount: number,
   now: Date,
 ): Promise<ReportResult> {
-  const rows = await getActiveEntitlements(database, customerId, featureId);
-  await resetStaleEntitlements(database, rows, now);
+  return database.transaction(async (tx) => {
+    // Lock rows with FOR UPDATE to prevent concurrent stacked deductions
+    const rows = (await tx
+      .select({
+        id: entitlement.id,
+        balance: entitlement.balance,
+        nextResetAt: entitlement.nextResetAt,
+        originalLimit: productFeature.limit,
+        resetInterval: productFeature.resetInterval,
+      })
+      .from(entitlement)
+      .innerJoin(subscription, eq(entitlement.subscriptionId, subscription.id))
+      .innerJoin(
+        productFeature,
+        and(
+          eq(productFeature.productInternalId, subscription.productInternalId),
+          eq(productFeature.featureId, entitlement.featureId),
+        ),
+      )
+      .where(
+        and(
+          eq(entitlement.customerId, customerId),
+          eq(entitlement.featureId, featureId),
+          inArray(subscription.status, ["active", "trialing"]),
+          or(isNull(subscription.endedAt), sql`${subscription.endedAt} > now()`),
+        ),
+      )
+      .for("update", { of: entitlement })) as ActiveEntitlementRow[];
 
-  const totalBalance = rows.reduce((sum, r) => sum + r.balance, 0);
-  if (totalBalance < amount) {
-    return { balance: aggregateBalance(rows), success: false };
-  }
+    await resetStaleEntitlements(tx, rows, now);
 
-  // Compute per-row target balances: greedily deduct from each row
-  const ids: string[] = [];
-  const chunks: SQL[] = [sql`(case`];
-  let remaining = amount;
+    const totalBalance = rows.reduce((sum, r) => sum + r.balance, 0);
+    if (totalBalance < amount) {
+      return { balance: aggregateBalance(rows), success: false };
+    }
 
-  for (const row of rows) {
-    if (row.originalLimit === null || row.balance <= 0) continue;
-    const deduction = Math.min(row.balance, remaining);
-    const target = row.balance - deduction;
-    chunks.push(sql`when ${entitlement.id} = ${row.id} then ${target}`);
-    ids.push(row.id);
-    row.balance = target;
-    remaining -= deduction;
-  }
+    // Compute per-row target balances: greedily deduct from each row
+    const ids: string[] = [];
+    const chunks: SQL[] = [sql`(case`];
+    let remaining = amount;
 
-  chunks.push(sql`end)::integer`);
+    for (const row of rows) {
+      if (row.originalLimit === null || row.balance <= 0) continue;
+      const deduction = Math.min(row.balance, remaining);
+      const target = row.balance - deduction;
+      chunks.push(sql`when ${entitlement.id} = ${row.id} then ${target}`);
+      ids.push(row.id);
+      row.balance = target;
+      remaining -= deduction;
+    }
 
-  // Single CASE UPDATE: set each row to its computed target balance
-  await database
-    .update(entitlement)
-    .set({ balance: sql.join(chunks, sql.raw(" ")), updatedAt: now })
-    .where(inArray(entitlement.id, ids));
+    chunks.push(sql`end)::integer`);
 
-  return { balance: aggregateBalance(rows), success: true };
+    await tx
+      .update(entitlement)
+      .set({ balance: sql.join(chunks, sql.raw(" ")), updatedAt: now })
+      .where(inArray(entitlement.id, ids));
+
+    return { balance: aggregateBalance(rows), success: true };
+  });
 }

@@ -111,6 +111,25 @@ describe("entitlement/service", () => {
       },
     ];
 
+    const createSelectForUpdateChain = (result: unknown) => ({
+      from: vi.fn().mockReturnValue({
+        innerJoin: vi.fn().mockReturnValue({
+          innerJoin: vi.fn().mockReturnValue({
+            where: vi.fn().mockReturnValue({
+              for: vi.fn().mockResolvedValue(result),
+            }),
+          }),
+        }),
+      }),
+    });
+    const txMock = {
+      select: vi
+        .fn()
+        .mockImplementation(() => createSelectForUpdateChain(rows.map((r) => ({ ...r })))),
+      update: vi.fn().mockReturnValue({
+        set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
+      }),
+    };
     const database = {
       execute: mockExecute([
         {
@@ -123,10 +142,7 @@ describe("entitlement/service", () => {
           newBalance: null,
         },
       ]),
-      select: vi.fn().mockImplementation(() => createSelectChain(rows.map((r) => ({ ...r })))),
-      update: vi.fn().mockReturnValue({
-        set: vi.fn().mockReturnValue({ where: vi.fn().mockResolvedValue(undefined) }),
-      }),
+      transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(txMock)),
     } as never;
 
     const result = await reportEntitlement(database, {
