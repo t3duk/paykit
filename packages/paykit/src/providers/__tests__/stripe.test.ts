@@ -200,13 +200,26 @@ describe("providers/stripe", () => {
           secretKey: "sk_test_123",
           webhookSecret: "whsec_123",
         }),
-      ).toThrowError(/apiVersion.*2026-03-04\.preview/);
+      ).toThrowError(/preview API version >= "2026-03-04\.preview"/);
     });
 
-    it("constructs the runtime when managedPayments is enabled with the preview apiVersion", () => {
+    it("constructs the runtime when managedPayments is enabled with the minimum preview apiVersion", () => {
       expect(() =>
         createStripeRuntime({
           apiVersion: "2026-03-04.preview",
+          id: "stripe",
+          kind: "stripe",
+          managedPayments: true,
+          secretKey: "sk_test_123",
+          webhookSecret: "whsec_123",
+        }),
+      ).not.toThrow();
+    });
+
+    it("constructs the runtime when managedPayments is enabled with a newer preview apiVersion", () => {
+      expect(() =>
+        createStripeRuntime({
+          apiVersion: "2027-01-01.preview",
           id: "stripe",
           kind: "stripe",
           managedPayments: true,

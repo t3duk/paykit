@@ -10,8 +10,8 @@ import type { ProviderTestClock, StripeProviderConfig, StripeRuntime } from "./p
  */
 export const PAYKIT_STRIPE_API_VERSION = "2025-10-29.clover";
 
-/** Preview API version required to use Stripe Managed Payments. */
-const STRIPE_MANAGED_PAYMENTS_API_VERSION = "2026-03-04.preview";
+/** Minimum preview API version that supports Stripe Managed Payments. */
+const STRIPE_MANAGED_PAYMENTS_MIN_VERSION = "2026-03-04";
 
 type StripeInvoiceWithExtras = StripeSdk.Invoice & {
   payment_intent?: StripeSdk.PaymentIntent | string | null;
@@ -907,12 +907,19 @@ export function createStripeProvider(
 
 export function createStripeRuntime(options: StripeProviderConfig): StripeRuntime {
   const apiVersion = options.apiVersion ?? PAYKIT_STRIPE_API_VERSION;
-  if (options.managedPayments && apiVersion !== STRIPE_MANAGED_PAYMENTS_API_VERSION) {
-    throw PayKitError.from(
-      "BAD_REQUEST",
-      PAYKIT_ERROR_CODES.PROVIDER_INVALID_CONFIG,
-      `stripe({ managedPayments: true }) requires apiVersion: "${STRIPE_MANAGED_PAYMENTS_API_VERSION}" (got "${apiVersion}"). Managed Payments is a Stripe preview feature; see https://docs.stripe.com/payments/managed-payments`,
-    );
+  if (options.managedPayments) {
+    const isPreview = apiVersion.endsWith(".preview");
+    const datePrefix = apiVersion.split(".preview")[0];
+    const meetsMinimum =
+      datePrefix !== undefined && datePrefix >= STRIPE_MANAGED_PAYMENTS_MIN_VERSION;
+
+    if (!(isPreview && meetsMinimum)) {
+      throw PayKitError.from(
+        "BAD_REQUEST",
+        PAYKIT_ERROR_CODES.PROVIDER_INVALID_CONFIG,
+        `stripe({ managedPayments: true }) requires a preview API version >= "${STRIPE_MANAGED_PAYMENTS_MIN_VERSION}.preview" (got "${apiVersion}"). Managed Payments is a Stripe preview feature; see https://docs.stripe.com/payments/managed-payments`,
+      );
+    }
   }
   const client = new StripeSdk(options.secretKey, {
     apiVersion: apiVersion as StripeSdk.LatestApiVersion,
