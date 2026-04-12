@@ -11,17 +11,20 @@ import {
   loadCliDeps,
   loadProductDiffs,
 } from "../utils/shared";
+import { printUpdateNotification, startUpdateCheck } from "../utils/update-check";
 
 async function pushAction(options: { config?: string; cwd: string; yes?: boolean }): Promise<void> {
   const cwd = path.resolve(options.cwd);
   const s = p.spinner();
 
+  const updateCheck = startUpdateCheck();
   s.start("Connecting");
 
   const deps = await loadCliDeps();
 
   deps.capture("cli_command", { command: "push" });
 
+  const pm = deps.detectPackageManager(cwd);
   const config = await deps.getPayKitConfig({ configPath: options.config, cwd });
   const database = createPool(deps, config.options.database);
 
@@ -71,11 +74,13 @@ async function pushAction(options: { config?: string; cwd: string; yes?: boolean
 
     if (!hasChanges && pendingMigrations === 0) {
       p.outro("Nothing to do");
+      await printUpdateNotification(updateCheck, deps.getInstallCommand(pm, ["paykitjs@latest"]));
       return;
     }
 
     if (pendingMigrations > 0 && !hasChanges) {
       p.outro("Done");
+      await printUpdateNotification(updateCheck, deps.getInstallCommand(pm, ["paykitjs@latest"]));
       return;
     }
 
@@ -98,6 +103,7 @@ async function pushAction(options: { config?: string; cwd: string; yes?: boolean
     p.outro(
       `Done ${picocolors.dim("·")} synced ${String(syncedCount)} product${syncedCount === 1 ? "" : "s"}`,
     );
+    await printUpdateNotification(updateCheck, deps.getInstallCommand(pm, ["paykitjs@latest"]));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     p.log.error(message);

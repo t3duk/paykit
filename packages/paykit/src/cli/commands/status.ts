@@ -12,6 +12,7 @@ import {
   loadCliDeps,
   loadProductDiffs,
 } from "../utils/shared";
+import { printUpdateNotification, startUpdateCheck } from "../utils/update-check";
 
 async function statusAction(options: {
   config?: string;
@@ -21,6 +22,7 @@ async function statusAction(options: {
   const cwd = path.resolve(options.cwd);
   const s = p.spinner();
 
+  const updateCheck = startUpdateCheck();
   s.start("Checking");
 
   const deps = await loadCliDeps();
@@ -157,9 +159,11 @@ async function statusAction(options: {
           ? "apply migrations"
           : "sync products";
     p.outro(`Run ${picocolors.bold(pushCmd)} to ${action}`);
+    await printUpdateNotification(updateCheck, deps.getInstallCommand(pm, ["paykitjs@latest"]));
     if (options.throw) process.exit(1);
   } else {
     p.outro("Everything looks good");
+    await printUpdateNotification(updateCheck, deps.getInstallCommand(pm, ["paykitjs@latest"]));
   }
 }
 

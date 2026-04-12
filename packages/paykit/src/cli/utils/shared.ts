@@ -6,7 +6,7 @@ import type { getPendingMigrationCount, migrateDatabase } from "../../database/i
 import type { dryRunSyncProducts, syncProducts } from "../../product/product-sync.service";
 import type { PayKitOptions } from "../../types/options";
 import type { NormalizedPlan } from "../../types/schema";
-import type { detectPackageManager, getRunCommand } from "./detect";
+import type { detectPackageManager, getInstallCommand, getRunCommand } from "./detect";
 import type {
   formatPlanLine,
   formatPrice,
@@ -31,6 +31,7 @@ export interface CliDeps {
   getPayKitConfig: typeof getPayKitConfig;
   capture: typeof capture;
   detectPackageManager: typeof detectPackageManager;
+  getInstallCommand: typeof getInstallCommand;
   getRunCommand: typeof getRunCommand;
 }
 
@@ -63,6 +64,7 @@ export async function loadCliDeps(): Promise<CliDeps> {
     getPayKitConfig: getConfig.getPayKitConfig,
     capture: telemetry.capture,
     detectPackageManager: detect.detectPackageManager,
+    getInstallCommand: detect.getInstallCommand,
     getRunCommand: detect.getRunCommand,
   };
 }
