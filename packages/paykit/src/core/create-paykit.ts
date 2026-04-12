@@ -1,10 +1,12 @@
 import { Pool } from "pg";
+import picocolors from "picocolors";
 
 import { createPayKitRouter, getApi } from "../api/methods";
 import { getPendingMigrationCount } from "../database/index";
 import { dryRunSyncProducts } from "../product/product-sync.service";
 import type { PayKitAPI, PayKitInstance } from "../types/instance";
 import type { PayKitOptions } from "../types/options";
+import { checkPayKitDependencies } from "../utilities/dependencies/index";
 import { createContext, type PayKitContext } from "./context";
 
 const payKitInstanceSymbol = Symbol.for("paykit.instance");
@@ -17,27 +19,28 @@ export function isPayKitInstance(value: unknown): value is PayKitInstance {
   );
 }
 
+const _global = globalThis as unknown as { __paykitDevChecksRan?: boolean };
+
 async function runDevChecks(ctx: PayKitContext, pool: Pool): Promise<void> {
-  try {
-    await pool.query("SELECT 1");
-  } catch {
-    ctx.logger.error("Could not connect to the database. Check your connection settings.");
-    return;
+  if (_global.__paykitDevChecksRan) return;
+  _global.__paykitDevChecksRan = true;
+  if (process.env.PAYKIT_DISABLE_DEPENDENCY_CHECKER !== "1") {
+    await checkPayKitDependencies();
   }
 
   await Promise.allSettled([
     getPendingMigrationCount(pool).then((count) => {
       if (count > 0) {
-        ctx.logger.error(
-          `${count} pending migration${count === 1 ? "" : "s"}. Run \`paykitjs push\` to apply.`,
+        console.warn(
+          `${picocolors.yellow("[paykit]")} ${count} pending migration${count === 1 ? "" : "s"}. Run ${picocolors.bold("paykitjs push")} to apply.`,
         );
       }
     }),
     dryRunSyncProducts(ctx).then((results) => {
       const outOfSync = results.filter((r) => r.action !== "unchanged");
       if (outOfSync.length > 0) {
-        ctx.logger.error(
-          `${outOfSync.length} product${outOfSync.length === 1 ? "" : "s"} out of sync: ${outOfSync.map((r) => r.id).join(", ")}. Run \`paykitjs push\` to update.`,
+        console.warn(
+          `${picocolors.yellow("[paykit]")} ${outOfSync.length} product${outOfSync.length === 1 ? "" : "s"} out of sync: ${outOfSync.map((r) => r.id).join(", ")}. Run ${picocolors.bold("paykitjs push")} to update.`,
         );
       }
     }),
