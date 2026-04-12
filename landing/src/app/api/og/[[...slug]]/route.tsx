@@ -4,7 +4,7 @@ import { ImageResponse } from "next/og";
 import { source } from "@/lib/source";
 
 const WIDTH = 1200;
-const HEIGHT = 630;
+const HEIGHT = 600;
 const PADDING_X = 69;
 const PADDING_BOTTOM = 65;
 
