@@ -485,7 +485,7 @@ async function initAction(options: { cwd: string; defaults: boolean }): Promise<
       "",
       `   ${b("Commands")}`,
       `   ${c("•")} Check status: ${b(`${exec} paykitjs status`)}`,
-      `   ${c("•")} To sync updated products: ${b(`${exec} paykitjs push`)}`,
+      `   ${c("•")} Sync updated products: ${b(`${exec} paykitjs push`)}`,
       `   ${c("•")} Add AI skills: ${b(`${getDlxPrefix(pm)} skills add getpaykit/skills`)}`,
       `   ${c("•")} Forward dev webhooks: ${b("stripe listen --forward-to localhost:3000/paykit/api/webhook/stripe")}`,
       "",
