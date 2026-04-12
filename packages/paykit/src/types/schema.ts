@@ -345,7 +345,12 @@ export function normalizeSchema(plans: PayKitPlansModule | undefined): Normalize
     };
   }
 
-  const exportedPlans = plans.filter(isPayKitPlan);
+  const exportedPlans = plans.map((planValue, index) => {
+    if (!isPayKitPlan(planValue)) {
+      throw new Error(`Invalid plan at index ${index}. Expected values returned by plan(...).`);
+    }
+    return planValue;
+  });
   const features = new Map<string, NormalizedFeature>();
   const defaultPlansByGroup = new Map<string, string>();
   const plansById = new Map<string, NormalizedPlan>();
