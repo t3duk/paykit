@@ -14,7 +14,7 @@ export const meteredResetIntervalValues = [
 export const planIntervalSchema = z.enum(planIntervalValues);
 export const meteredResetIntervalSchema = z.union([
   z.enum(meteredResetIntervalValues),
-  z.number().int().positive("Reset interval seconds must be a positive integer"),
+  z.coerce.number().int().positive("Reset interval seconds must be a positive integer"),
 ]);
 
 export type PlanInterval = z.infer<typeof planIntervalSchema>;
@@ -36,7 +36,15 @@ function addYears(date: Date, years: number): Date {
   return next;
 }
 
-function parseSecondInterval(interval: string): number | null {
+export function getSecondInterval(interval: string | number): number | null {
+  if (typeof interval === "number") {
+    if (!Number.isSafeInteger(interval) || interval <= 0) {
+      throw new Error(`Invalid interval seconds: "${String(interval)}"`);
+    }
+
+    return interval;
+  }
+
   if (!/^\d+$/u.test(interval)) {
     return null;
   }
@@ -50,11 +58,7 @@ function parseSecondInterval(interval: string): number | null {
 }
 
 export function addInterval(date: Date, interval: string | number): Date {
-  if (typeof interval === "number") {
-    return new Date(date.getTime() + interval * 1000);
-  }
-
-  const secondInterval = parseSecondInterval(interval);
+  const secondInterval = getSecondInterval(interval);
   if (secondInterval !== null) {
     return new Date(date.getTime() + secondInterval * 1000);
   }

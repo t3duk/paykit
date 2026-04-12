@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { addInterval, getStripeRecurringInterval } from "../interval";
+import {
+  addInterval,
+  getSecondInterval,
+  getStripeRecurringInterval,
+  meteredResetIntervalSchema,
+} from "../interval";
 import { feature, normalizeSchema, plan } from "../schema";
 
 describe("types/interval", () => {
@@ -65,5 +70,11 @@ describe("types/interval", () => {
     expect(getStripeRecurringInterval("quarterly")).toEqual({ count: 3, interval: "month" });
     expect(getStripeRecurringInterval("biyear")).toEqual({ count: 6, interval: "month" });
     expect(getStripeRecurringInterval("week")).toEqual({ interval: "week" });
+  });
+
+  it("round-trips numeric second resets through the shared schema", () => {
+    expect(meteredResetIntervalSchema.parse("90")).toBe(90);
+    expect(meteredResetIntervalSchema.parse(90)).toBe(90);
+    expect(getSecondInterval("90")).toBe(90);
   });
 });
