@@ -2,7 +2,7 @@ import { type SQL, and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { PayKitDatabase } from "../database";
 import { entitlement, productFeature, subscription } from "../database/schema";
-import { addInterval } from "../types/interval";
+import { addInterval, getSecondInterval } from "../types/interval";
 
 export interface EntitlementBalance {
   limit: number;
@@ -30,6 +30,13 @@ interface ActiveEntitlementRow {
 }
 
 function getNextResetAt(currentResetAt: Date, now: Date, resetInterval: string): Date {
+  const secondInterval = getSecondInterval(resetInterval);
+  if (secondInterval !== null) {
+    const elapsedMs = now.getTime() - currentResetAt.getTime();
+    const missedIntervals = Math.max(0, Math.ceil(elapsedMs / (secondInterval * 1000)));
+    return addInterval(currentResetAt, missedIntervals * secondInterval);
+  }
+
   let nextResetAt = new Date(currentResetAt);
 
   while (nextResetAt <= now) {
