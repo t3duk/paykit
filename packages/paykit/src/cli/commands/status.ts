@@ -89,9 +89,10 @@ async function statusAction(options: {
   if (providerResult.webhookEndpoints === null) {
     webhookStatus = `${picocolors.dim("?")} Could not check webhook status`;
   } else if (providerResult.webhookEndpoints.length > 0) {
-    const lines = providerResult.webhookEndpoints.map((ep) =>
-      picocolors.dim(`· Webhook endpoint registered (${ep.url})`),
-    );
+    const lines = providerResult.webhookEndpoints.map((ep) => {
+      const label = ep.status === "enabled" ? "registered" : `status: ${ep.status}`;
+      return picocolors.dim(`· Webhook endpoint ${label} (${ep.url})`);
+    });
     webhookStatus = lines.join("\n  ");
   } else {
     webhookStatus = picocolors.dim("· No webhook endpoint (use provider CLI for local testing)");

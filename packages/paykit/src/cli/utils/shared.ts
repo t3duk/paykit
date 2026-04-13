@@ -109,27 +109,35 @@ export interface ProviderCheckResult {
 export async function checkProvider(
   providerConfig: PayKitProviderConfig,
 ): Promise<ProviderCheckResult> {
-  const adapter = providerConfig.createAdapter();
-  const result = await adapter.check?.();
+  try {
+    const adapter = providerConfig.createAdapter();
+    const result = await adapter.check?.();
 
-  if (!result) {
+    if (!result) {
+      return {
+        account: { ok: true, displayName: providerConfig.name, mode: "unknown" },
+        webhookEndpoints: null,
+      };
+    }
+
+    if (result.ok) {
+      return {
+        account: { ok: true, displayName: result.displayName, mode: result.mode },
+        webhookEndpoints: result.webhookEndpoints ?? null,
+      };
+    }
+
     return {
-      account: { ok: true, displayName: providerConfig.name, mode: "unknown" },
+      account: { ok: false, message: result.error ?? "Provider check failed" },
+      webhookEndpoints: null,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Provider check failed";
+    return {
+      account: { ok: false, message },
       webhookEndpoints: null,
     };
   }
-
-  if (result.ok) {
-    return {
-      account: { ok: true, displayName: result.displayName, mode: result.mode },
-      webhookEndpoints: result.webhookEndpoints ?? null,
-    };
-  }
-
-  return {
-    account: { ok: false, message: result.error ?? "Provider check failed" },
-    webhookEndpoints: null,
-  };
 }
 
 export async function loadProductDiffs(
