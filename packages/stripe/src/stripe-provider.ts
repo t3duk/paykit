@@ -523,7 +523,7 @@ function createDetachedPaymentMethodEvents(event: StripeSdk.Event): NormalizedWe
 }
 
 export function createStripeProvider(client: StripeSdk, options: StripeOptions): PaymentProvider {
-  const currency = options.currency?.toLowerCase() ?? "usd";
+  const currency = options.currency?.trim().toLowerCase() || "usd";
 
   return {
     id: "stripe",
